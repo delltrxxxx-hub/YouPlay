@@ -4,27 +4,27 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff3d77"/>
-      <stop offset="0.5" stop-color="#8b3dff"/>
-      <stop offset="1" stop-color="#22d3ee"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a221e"/>
+      <stop offset="1" stop-color="#110d0b"/>
     </linearGradient>
-    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
-      <stop offset=".5" stop-color="#fff" stop-opacity=".06"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    <linearGradient id="or" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff7448"/>
+      <stop offset="1" stop-color="#f03c1c"/>
     </linearGradient>
-    <radialGradient id="glow" cx=".5" cy=".55" r=".5">
-      <stop offset="0" stop-color="#fff" stop-opacity=".35"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
+    <mask id="tri" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <path d="M190 150 L190 362 L374 256 Z" fill="#fff" stroke="#fff" stroke-width="44" stroke-linejoin="round"/>
+    </mask>
   </defs>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#bg)"/>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#glow)"/>
-  <circle cx="256" cy="264" r="150" fill="#fff" fill-opacity=".16" stroke="#fff" stroke-opacity=".6" stroke-width="10"/>
-  <path d="M218 190 L338 264 L218 338 Z" fill="#fff" stroke="#fff" stroke-width="18" stroke-linejoin="round"/>
-  <path d="M40 150 Q40 40 150 40 H362 Q472 40 472 150 V200 Q256 120 40 220 Z" fill="url(#gloss)"/>
-  <rect x="17.5" y="17.5" width="477" height="477" rx="118.5" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="3"/>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="#fff" stroke-opacity=".07" stroke-width="4"/>
+  <g mask="url(#tri)" fill="url(#or)">
+    <rect x="150" y="124" width="260" height="38"/>
+    <rect x="150" y="176" width="260" height="38"/>
+    <rect x="150" y="228" width="260" height="56"/>
+    <rect x="150" y="298" width="260" height="38"/>
+    <rect x="150" y="350" width="260" height="38"/>
+  </g>
 </svg>`;
 
 const render = (size) => new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng();
@@ -32,6 +32,7 @@ const render = (size) => new Resvg(svg, { fitTo: { mode: 'width', value: size } 
 mkdirSync('build', { recursive: true });
 mkdirSync('extension/icons', { recursive: true });
 writeFileSync('build/icon.png', render(512));
+writeFileSync('app/logo.svg', svg);
 for (const n of [16, 32, 48, 128]) writeFileSync(`extension/icons/${n}.png`, render(n));
 
 // ICO with embedded PNG images

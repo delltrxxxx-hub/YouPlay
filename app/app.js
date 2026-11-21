@@ -75,18 +75,30 @@
   let route = { name: 'home' };
   const LIB = ['lib', 'likes', 'local', 'pl', 'scset'];
   const history = [];
+  const viewCache = {};
+  const CACHE = ['home', 'lib', 'likes', 'local'];
+  const dirty = (...names) => { for (const n of names) delete viewCache[n]; };
+  function stash() {
+    if (!CACHE.includes(route.name) || !view.firstChild) return;
+    const f = document.createDocumentFragment(); while (view.firstChild) f.append(view.firstChild);
+    viewCache[route.name] = { f, top: view.scrollTop, at: Date.now() };
+  }
   function go(name, params, push = true) {
     if (name === 'settings') { openSettings(); return; }
     if (name === 'search' && !(params && params.q)) { document.body.classList.add('searching'); $('#q').focus(); if (!lastSearch) { route = { name: 'search' }; render(); paintNav(); } else { route = { name: 'search', q: lastSearch }; render(); paintNav(); } return; }
     if (push && route.name !== name) history.push(route);
+    stash();
     route = { name, ...(params || {}) };
-    paintNav(); render(); $('#view').scrollTop = 0;
+    paintNav();
+    const c = !params && viewCache[name];
+    if (c && Date.now() - c.at < 10 * 60e3) { view.replaceChildren(c.f); view.scrollTop = c.top; delete viewCache[name]; return; }
+    render(); view.scrollTop = 0;
   }
   function back() {
     if (!$('#modal').hidden) { closeModal(); return true; }
     if ($('#np').classList.contains('open')) { if ($('#np').classList.contains('sheet-on')) { setSheet(null); return true; } closeNP(); return true; }
     if (document.body.classList.contains('searching')) { document.body.classList.remove('searching'); $('#q').blur(); return true; }
-    if (history.length) { route = history.pop(); paintNav(); render(); return true; }
+    if (history.length) { stash(); route = history.pop(); paintNav(); const c = CACHE.includes(route.name) && viewCache[route.name]; if (c) { view.replaceChildren(c.f); view.scrollTop = c.top; delete viewCache[route.name]; } else render(); return true; }
     if (route.name !== 'home') { go('home', null, false); return true; }
     return false;
   }
@@ -154,7 +166,7 @@
   async function renderHome() {
     const hello = new Date().getHours();
     const greet = hello < 6 ? 'Доброй ночи' : hello < 12 ? 'Доброе утро' : hello < 18 ? 'Добрый день' : 'Добрый вечер';
-    view.innerHTML = `<div class="page-h fadein"><small>${greet}</small><h1>Главная</h1></div><div id="home-body">${online ? loading(8) : ''}</div>`;
+    view.innerHTML = `<div class="page-h"><small>${greet}</small><h1>Главная</h1></div><div id="home-body">${online ? loading(8) : ''}</div>`;
     if (!online) { $('#home-body').innerHTML = `<div class="banner green"><span class="ic">${IC('music')}</span><div><b>Без интернета работает «Моя музыка»</b><small>Музыка с этого устройства играет без сети</small></div><button class="btn" data-go="local">Открыть</button></div>`; return; }
     if (!homeData || !homeFresh) {
       const refresh = eng('home').then((d) => { if (d.sections && d.sections.length) { homeData = d; homeFresh = true; try { localStorage.setItem('youplay-home', JSON.stringify(d)); } catch (_) {} } });
@@ -162,8 +174,8 @@
     }
     const body = $('#home-body'); if (!body) return;
     if (!homeData || !homeData.sections.length) { body.innerHTML = `<div class="note">YouTube Music загружается…</div>`; setTimeout(() => { if (route.name === 'home' && !homeData) render(); }, 3000); return; }
-    const recentHTML = S.recent.length ? `<section class="sec fadein"><div class="sec-h"><h2>Недавно играло</h2></div><div class="cards" id="sec-recent">${S.recent.slice(0, 16).map(cardHTML).join('')}</div></section>` : '';
-    body.innerHTML = recentHTML + homeData.sections.map((s, si) => `<section class="sec fadein"><div class="sec-h"><h2>${esc(s.title || 'Для вас')}</h2></div>${s.layout === 'cards' ? `<div class="cards" data-s="${si}">${s.items.map(cardHTML).join('')}</div>` : `<div class="rows non" data-s="${si}">${s.items.slice(0, 8).map((it, i) => rowHTML(it, i, { n: false })).join('')}</div>`}</section>`).join('');
+    const recentHTML = S.recent.length ? `<section class="sec"><div class="sec-h"><h2>Недавно играло</h2></div><div class="cards" id="sec-recent">${S.recent.slice(0, 16).map(cardHTML).join('')}</div></section>` : '';
+    body.innerHTML = recentHTML + homeData.sections.map((s, si) => `<section class="sec"><div class="sec-h"><h2>${esc(s.title || 'Для вас')}</h2></div>${s.layout === 'cards' ? `<div class="cards" data-s="${si}">${s.items.map(cardHTML).join('')}</div>` : `<div class="rows non" data-s="${si}">${s.items.slice(0, 8).map((it, i) => rowHTML(it, i, { n: false })).join('')}</div>`}</section>`).join('');
     if (S.recent.length) bindCards($('#sec-recent'), S.recent, 'Недавно играло');
     for (const el of $$('[data-s]', body)) { const s = homeData.sections[+el.dataset.s]; if (s.layout === 'cards') bindCards(el, s.items, s.title); else bindRows(el, s.items, s.title); }
   }
@@ -180,7 +192,7 @@
     const q = route.q || '';
     if (!q) { view.innerHTML = `<div class="page-h"><small>Поиск</small><h1>Что послушаем?</h1><p>YouTube Music и SoundCloud — в одном списке</p></div>`; return; }
     const my = ++searchSeq;
-    view.innerHTML = `<div class="page-h fadein"><small>Поиск</small><h1>${esc(q)}</h1></div><div class="tabs-row" id="s-tabs"></div><div id="s-more"></div><div class="rows" id="s-list">${loading(8)}</div>`;
+    view.innerHTML = `<div class="page-h"><small>Поиск</small><h1>${esc(q)}</h1></div><div class="tabs-row" id="s-tabs"></div><div id="s-more"></div><div class="rows" id="s-list">${loading(8)}</div>`;
     let yt = null, sc = null, filter = 'all';
     const paint = () => {
       if (my !== searchSeq) return;
@@ -205,7 +217,7 @@
     paint();
   }
   async function renderBrowse() {
-    view.innerHTML = `<div class="hero fadein"><div class="cv">${route.art ? `<img src="${esc(route.art)}">` : ''}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>YouTube Music</small><h1>${esc(route.title || '')}</h1><p id="b-sub"></p></div><div class="hero-btns"><button class="btn" id="b-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="b-shuf">${IC('shuffle', 18)}Перемешать</button></div></div></div><div class="rows" id="b-list">${loading(8)}</div>`;
+    view.innerHTML = `<div class="hero"><div class="cv">${route.art ? `<img src="${esc(route.art)}">` : ''}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>YouTube Music</small><h1>${esc(route.title || '')}</h1><p id="b-sub"></p></div><div class="hero-btns"><button class="btn" id="b-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="b-shuf">${IC('shuffle', 18)}Перемешать</button></div></div></div><div class="rows" id="b-list">${loading(8)}</div>`;
     const d = await eng('browse', { href: route.href });
     if (route.name !== 'browse') return;
     $('#b-sub').textContent = d.subtitle || (d.tracks ? d.tracks.length + ' треков' : '');
@@ -248,7 +260,7 @@
     const paint = (busy) => {
       if (route.name !== 'likes') return;
       const all = mergedLikes();
-      view.innerHTML = `<div class="hero fadein"><div class="cv likes">${IC('heart', 64)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист</small><h1>Любимое</h1><p><span class="badge yt">YouTube Music</span> ${likesCache.yt.length} &nbsp; <span class="badge sc">SoundCloud</span> ${S.sc && S.sc.login === false ? 'не подключён' : likesCache.sc.length}</p></div>
+      view.innerHTML = `<div class="hero"><div class="cv likes">${IC('heart', 64)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист</small><h1>Любимое</h1><p><span class="badge yt">YouTube Music</span> ${likesCache.yt.length} &nbsp; <span class="badge sc">SoundCloud</span> ${S.sc && S.sc.login === false ? 'не подключён' : likesCache.sc.length}</p></div>
         <div class="hero-btns"><button class="btn" id="l-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="l-shuf">${IC('shuffle', 18)}Перемешать</button><button class="btn ghost" id="l-ref" title="Обновить">${IC('update', 18)}</button></div></div></div>
         ${S.sc && S.sc.login === false ? `<div class="banner"><span class="ic" style="color:#ff8a3d">${IC('cloud')}</span><div><b>Подключите SoundCloud</b><small>Лайки SoundCloud и YouTube Music соберутся в один плейлист по датам</small></div><button class="btn" id="l-sc">Войти в SoundCloud</button></div>` : ''}
         ${S.account && !S.account.signedIn ? `<div class="banner"><span class="ic" style="color:#ff5a5a">${IC('yt')}</span><div><b>Войдите в YouTube Music</b><small>Чтобы здесь появились ваши лайки и сердечко сохраняло треки</small></div><button class="btn" id="l-yt">Войти</button></div>` : ''}
@@ -292,7 +304,7 @@
       if ((libFilter === 'all' || libFilter === 'yt') && pls.yt) for (const p of pls.yt.items) tiles.push({ kind: 'yt', href: p.browse, title: p.title, sub: p.sub || 'YouTube Music', art: p.art, src: 'yt' });
       if ((libFilter === 'all' || libFilter === 'sc') && pls.sc) for (const p of pls.sc.items) tiles.push({ kind: 'sc', url: p.url, title: p.title, sub: p.count + ' тр.', art: p.art, src: 'sc' });
       const ytOut = pls.yt && pls.yt.login === false, scOut = pls.sc && pls.sc.login === false;
-      view.innerHTML = `<div class="page-h fadein"><small>Всё в одном месте</small><h1>Библиотека</h1></div>
+      view.innerHTML = `<div class="page-h"><small>Всё в одном месте</small><h1>Библиотека</h1></div>
         <div class="tabs-row" id="lib-f">${[['all', 'Всё'], ['yp', 'YouPlay'], ['yt', 'YouTube Music'], ['sc', 'SoundCloud']].map(([id, l]) => `<button class="chip${libFilter === id ? ' on' : ''}" data-f="${id}">${l}</button>`).join('')}<button class="chip ghost" id="lib-ref" title="Обновить">${IC('update', 16)}</button></div>
         <div class="grid" id="lib-grid"><div class="tile new" data-k="new"><div class="cv">${IC('plus', 40)}</div><b>Новый плейлист</b><small>YouPlay, YouTube Music или SoundCloud</small></div>
         ${tiles.map((t, i) => `<div class="tile" data-t="${i}"><div class="cv ${t.cls || ''}">${t.art ? `<img loading="lazy" src="${esc(t.art)}" alt="">` : IC(t.icon || 'library', 44)}${t.src ? `<span class="badge ${t.src}">${t.src === 'yt' ? 'YouTube' : 'SoundCloud'}</span>` : ''}</div><b>${esc(t.title)}</b><small>${esc(t.sub)}</small></div>`).join('')}
@@ -316,7 +328,7 @@
     const p = S.playlists.find((x) => x.id === route.id); if (!p) { go('lib', null, false); return; }
     const list = p.items.filter((x) => !isDisliked(x));
     const n = { yt: 0, sc: 0, local: 0 }; for (const x of p.items) n[x.src] = (n[x.src] || 0) + 1;
-    view.innerHTML = `<div class="hero fadein"><div class="cv">${plArt(p) ? `<img src="${esc(plArt(p))}">` : IC('library', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист YouPlay</small><h1>${esc(p.name)}</h1><p>${p.items.length} тр. ${n.yt ? '· <span class="badge yt">YouTube</span> ' + n.yt : ''} ${n.sc ? '· <span class="badge sc">SoundCloud</span> ' + n.sc : ''} ${n.local ? '· <span class="badge local">Файлы</span> ' + n.local : ''}</p></div>
+    view.innerHTML = `<div class="hero"><div class="cv">${plArt(p) ? `<img src="${esc(plArt(p))}">` : IC('library', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист YouPlay</small><h1>${esc(p.name)}</h1><p>${p.items.length} тр. ${n.yt ? '· <span class="badge yt">YouTube</span> ' + n.yt : ''} ${n.sc ? '· <span class="badge sc">SoundCloud</span> ' + n.sc : ''} ${n.local ? '· <span class="badge local">Файлы</span> ' + n.local : ''}</p></div>
       <div class="hero-btns"><button class="btn" id="p-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="p-shuf">${IC('shuffle', 18)}Перемешать</button><button class="btn ghost" id="p-ren">Переименовать</button><button class="btn ghost" id="p-del">Удалить</button></div></div></div>
       <div class="rows" id="p-list">${list.length ? list.map((it, i) => rowHTML(it, i)).join('') : '<div class="note">Пока пусто. Нажмите ⋯ у любого трека → «Добавить в плейлист».</div>'}</div>`;
     bindRows($('#p-list'), list, p.name, { pl: p });
@@ -326,7 +338,7 @@
     $('#p-del').onclick = () => confirmBox('Удалить плейлист «' + p.name + '»?', 'Треки останутся в YouTube Music и SoundCloud, удалится только этот список.', 'Удалить', () => { S.playlists = S.playlists.filter((x) => x !== p); save(); go('lib', null, false); toast('Плейлист удалён'); });
   }
   async function renderScSet() {
-    view.innerHTML = `<div class="hero fadein"><div class="cv">${route.art ? `<img src="${esc(route.art)}">` : IC('cloud', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист SoundCloud</small><h1>${esc(route.title || '')}</h1><p id="ss-n">Загружаю…</p></div><div class="hero-btns"><button class="btn" id="ss-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="ss-shuf">${IC('shuffle', 18)}Перемешать</button></div></div></div><div class="rows" id="ss-list">${loading(8)}</div>`;
+    view.innerHTML = `<div class="hero"><div class="cv">${route.art ? `<img src="${esc(route.art)}">` : IC('cloud', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист SoundCloud</small><h1>${esc(route.title || '')}</h1><p id="ss-n">Загружаю…</p></div><div class="hero-btns"><button class="btn" id="ss-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="ss-shuf">${IC('shuffle', 18)}Перемешать</button></div></div></div><div class="rows" id="ss-list">${loading(8)}</div>`;
     const url = route.url;
     const d = await ask({ t: 'sc', op: 'set', arg: url }, 45000);
     if (route.name !== 'scset' || route.url !== url) return;
@@ -393,7 +405,7 @@
       box.onclick = async (e) => {
         const b = e.target.closest('.pk'); if (!b) return;
         if (b.dataset.new) { createPlaylist(it); return; }
-        if (b.dataset.yp != null) { const p = S.playlists[+b.dataset.yp]; if (!has(p)) { p.items.push(slim(it)); save(); toast('Добавлено в «' + p.name + '»'); } else toast('Уже есть в «' + p.name + '»'); closeModal(); if (route.name === 'lib') renderLib(); return; }
+        if (b.dataset.yp != null) { const p = S.playlists[+b.dataset.yp]; if (!has(p)) { p.items.push(slim(it)); save(); dirty('lib'); toast('Добавлено в «' + p.name + '»'); } else toast('Уже есть в «' + p.name + '»'); closeModal(); if (route.name === 'lib') renderLib(); return; }
         closeModal();
         if (b.dataset.yt != null) { const p = yt[+b.dataset.yt]; toast('Добавляю в YouTube Music…'); const r = await eng('plAdd', { videoId: it.videoId, title: it.title, artist: it.artist, playlist: p.title }); toast(r.ok ? '✓ Добавлено в «' + p.title + '» (YouTube Music)' : r.login === false ? 'Войдите в YouTube Music в настройках' : 'YouTube Music не принял трек — попробуйте ещё раз'); }
         if (b.dataset.sc != null) { const p = sc[+b.dataset.sc]; toast('Добавляю в SoundCloud…'); const r = await ask({ t: 'sc', op: 'addto', arg: it.url + '#name=' + encodeURIComponent(p.title) }, 45000); toast(r.ok ? '✓ Добавлено в «' + p.title + '» (SoundCloud)' : r.login === false ? 'Войдите в SoundCloud в настройках' : 'SoundCloud не принял трек — попробуйте ещё раз'); }
@@ -425,7 +437,7 @@
       closeModal();
       if (where === 'yp') {
         const p = { id: 'p' + Date.now().toString(36), name, items: it ? [slim(it)] : [], at: Date.now() };
-        S.playlists.unshift(p); save(); toast('Плейлист «' + name + '» создан');
+        S.playlists.unshift(p); save(); dirty('lib'); toast('Плейлист «' + name + '» создан');
         if (route.name === 'lib') renderLib(); else if (!it) go('pl', { id: p.id });
       } else if (where === 'yt') {
         toast('Создаю плейлист в YouTube Music…');
@@ -452,7 +464,7 @@
     return localCache.list;
   }
   async function renderLocal() {
-    view.innerHTML = `<div class="hero fadein"><div class="cv local">${IC(ANDROID ? 'phone' : 'music', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Работает без интернета</small><h1>Моя музыка</h1><p id="lo-n">Ищу музыку…</p></div>
+    view.innerHTML = `<div class="hero"><div class="cv local">${IC(ANDROID ? 'phone' : 'music', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Работает без интернета</small><h1>Моя музыка</h1><p id="lo-n">Ищу музыку…</p></div>
       <div class="hero-btns"><button class="btn" id="lo-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="lo-shuf">${IC('shuffle', 18)}Перемешать</button>${ANDROID ? '' : `<button class="btn ghost" id="lo-folder" title="Папка с музыкой">Папка…</button>`}</div></div></div>
       <div class="rows" id="lo-list">${loading(6)}</div>`;
     const list = (await localTracks(true)).sort((a, b) => (a.artist + a.title).localeCompare(b.artist + b.title, 'ru'));
@@ -607,7 +619,7 @@
       const c = fmt(P.time), dd = fmt(d);
       if ($('#pl-cur').textContent !== c) { $('#pl-cur').textContent = c; $('#np-cur').textContent = c; }
       if ($('#pl-dur').textContent !== dd) { $('#pl-dur').textContent = dd; $('#np-dur').textContent = dd; }
-      if ($('#np').classList.contains('open')) tickLyrics();
+      if ($('#np').classList.contains('open') && !$('#lyrics').classList.contains('on')) tickLyrics();
       sleepTick();
     }
   }
@@ -714,7 +726,7 @@
     if (!r.ok) { toast('SoundCloud не принял лайк — попробуйте ещё раз'); return; }
     if (liked) likesCache.sc = likesCache.sc.filter((x) => x.url !== it.url);
     else likesCache.sc.unshift({ ...it, src: 'sc', likedAt: new Date().toISOString() });
-    localStorage.setItem('youplay-likes', JSON.stringify(likesCache));
+    localStorage.setItem('youplay-likes', JSON.stringify(likesCache)); dirty('likes');
     if (btn) btn.innerHTML = IC(liked ? 'heartLine' : 'heart', 18), btn.classList.toggle('on', !liked);
     paintLikes(); toast(liked ? 'Убрано из лайков SoundCloud' : '♥ Сохранено в SoundCloud');
   }
@@ -730,6 +742,7 @@
   }
 
   // ───────── lyrics (LRCLIB) ─────────
+  let wordEls = null, smooth = 0, lastRaf = 0, lastP = '';
   let lines = [], lastLine = -2, lyMeta = { dur: 0, tempo: false }, lyReq = 0;
   const TEMPO = /(slowed|sped|speed up|nightcore|daycore)/i;
   const clean = (t) => t.replace(/\s*[\(\[][^\)\]]*(slowed|sped|reverb|nightcore|official|video|audio|lyric|mv|remaster|hd|hq|клип)[^\)\]]*[\)\]]/gi, '').replace(/\s*-\s*(official|lyric).*$/i, '').trim();
@@ -773,9 +786,27 @@
     }
     lyMeta = { dur: (res && res.duration) || 0, tempo };
     if (res && res.syncedLyrics) {
-      for (const raw of res.syncedLyrics.split(/\r?\n/)) { const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)]; const txt = raw.replace(/\[[^\]]*\]/g, '').trim(); for (const m of tags) lines.push({ t: +m[1] * 60 + +m[2], text: txt }); }
+      for (const raw of res.syncedLyrics.split(/\r?\n/)) {
+        const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+        const body = raw.replace(/\[[^\]]*\]/g, '');
+        // enhanced LRC: <mm:ss.xx> before each word gives exact word timing
+        const wt = [...body.matchAll(/<(\d+):(\d+(?:\.\d+)?)>\s*([^<]*)/g)].map((m) => ({ t: +m[1] * 60 + +m[2], w: m[3].trim() })).filter((x) => x.w);
+        const txt = body.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        for (const m of tags) lines.push({ t: +m[1] * 60 + +m[2], text: txt, wt: wt.length ? wt : null });
+      }
       lines.sort((x, y) => x.t - y.t);
-      $('#ly-list').innerHTML = lines.map((l, i) => `<p class="ly-line" data-l="${i}">${l.text ? esc(l.text) : '♪'}</p>`).join('');
+      lines.forEach((l, i) => {
+        const end = i + 1 < lines.length ? Math.min(lines[i + 1].t, l.t + 9) : l.t + 6;
+        const words = l.text ? l.text.split(' ') : [];
+        if (l.wt && l.wt.length === words.length) l.words = l.wt.map((x, k) => ({ s: x.t, e: k + 1 < l.wt.length ? l.wt[k + 1].t : end }));
+        else {
+          // no word timing in the file: share the line's time between its words by length (sung words take ~85% of the line)
+          const span = Math.max(0.6, (end - l.t) * 0.85), total = words.reduce((a, w) => a + w.length + 1.5, 0) || 1;
+          let at = l.t; l.words = words.map((w) => { const d = span * (w.length + 1.5) / total, o = { s: at, e: at + d }; at += d; return o; });
+        }
+      });
+      $('#ly-list').innerHTML = lines.map((l, i) => `<p class="ly-line" data-l="${i}">${l.text ? l.text.split(' ').map((w) => `<span class="w">${esc(w)}</span>`).join(' ') : '<span class="w">♪</span>'}</p>`).join('');
+      wordEls = null;
     } else if (res && res.plainLyrics) {
       $('#ly-list').innerHTML = res.plainLyrics.split(/\r?\n/).map((l) => `<p class="ly-line plain">${esc(l) || '&nbsp;'}</p>`).join('');
       $('#ly-list').style.transform = 'translate3d(0,-30vh,0)';
@@ -791,12 +822,33 @@
     let lo = 0, hi = lines.length - 1, i = -1;
     while (lo <= hi) { const m = (lo + hi) >> 1; if (lines[m].t <= t) { i = m; lo = m + 1; } else hi = m - 1; }
     if (i === lastLine) return;
-    lastLine = i;
+    lastLine = i; wordEls = null;
     const els = $$('.ly-line', $('#ly-list'));
     els.forEach((el, k) => { el.classList.toggle('on', k === i); el.classList.toggle('past', k < i); el.style.setProperty('--d', Math.min(Math.abs(k - i), 6)); });
     const el = els[i];
     if (el) { const box = $('.ly-scroll'); $('#ly-list').style.transform = `translate3d(0,${Math.round(box.clientHeight * 0.38 - el.offsetTop - el.offsetHeight / 2)}px,0)`; }
   }
+  function karaoke(now) {
+    requestAnimationFrame(karaoke);
+    const dt = Math.min(0.1, (now - (lastRaf || now)) / 1000); lastRaf = now;
+    if (!P.cur || !lines.length || document.hidden || !$('#np').classList.contains('open') || !$('#lyrics').classList.contains('on')) return;
+    if (P.playing) smooth += dt;
+    if (Math.abs(smooth - P.time) > 0.3 || !P.playing) smooth = P.time;
+    const t = smooth * ratio() + offset() + 0.15;
+    const save = P.time; P.time = smooth; tickLyrics(); P.time = save;
+    const l = lines[lastLine]; if (!l || !l.words) return;
+    if (!wordEls) { const el = $('.ly-line.on', $('#ly-list')); wordEls = el ? [...el.querySelectorAll('.w')] : []; }
+    let sig = '';
+    for (let k = 0; k < wordEls.length; k++) {
+      const w = l.words[k]; if (!w) break;
+      const p = t >= w.e ? 100 : t <= w.s ? 0 : Math.round((t - w.s) / (w.e - w.s) * 50) * 2;
+      sig += p + ',';
+      const el = wordEls[k];
+      if (el._p !== p) { el._p = p; el.style.setProperty('--p', p + '%'); el.classList.toggle('cur', p > 0 && p < 100); el.classList.toggle('sung', p === 100); }
+    }
+    lastP = sig;
+  }
+  requestAnimationFrame(karaoke);
   $('#ly-list').addEventListener('click', (e) => { const l = e.target.closest('[data-l]'); if (l && lines[+l.dataset.l]) { P.seek(Math.max(0, (lines[+l.dataset.l].t - offset()) / ratio())); lastLine = -2; } });
   const paintOffset = () => { const o = offset(); $('#ly-off').textContent = o ? (o > 0 ? '+' : '') + o.toFixed(1).replace('.', ',') + ' с' : 'синхр.'; };
   const nudge = (d) => { if (!P.cur) return; const k = key(P.cur); S.offsets[k] = d === 0 ? 0 : Math.round(((S.offsets[k] || 0) + d) * 10) / 10; save(); paintOffset(); lastLine = -2; };
