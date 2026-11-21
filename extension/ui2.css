@@ -1,0 +1,79 @@
+/* YouPlay 1.7 — settings with accounts, like/dislike, sleep timer, update prompt, polish */
+
+/* YouTube's red page-loading bar and loading spinners: YouPlay should feel like an app */
+yt-page-navigation-progress, ytmusic-app > yt-page-navigation-progress, #progress.yt-page-navigation-progress,
+ytmusic-browse-response > tp-yt-paper-spinner-lite, ytmusic-app-layout > tp-yt-paper-spinner-lite { display: none !important; }
+
+/* calmer, consistent controls */
+#yp-root button:focus-visible, .yp-h-row:focus-visible { outline: 2px solid var(--yp-accent); outline-offset: 2px; }
+#yp-root button:disabled { opacity: .5; pointer-events: none; }
+.yp-ic { will-change: transform; }
+
+/* ── settings ── */
+.yp-modal header > svg { color: var(--yp-accent); }
+.yp-set-title { font: 800 26px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.02em; }
+.yp-modal section > h3 { margin-top: 4px; }
+.yp-modal section { padding-top: 14px; border-top: 1px solid var(--yp-border); }
+.yp-modal section:first-of-type { border-top: 0; padding-top: 4px; }
+.yp-sub-h { margin: 14px 0 8px; font-size: 12px; font-weight: 700; color: var(--yp-muted); }
+.yp-hint { margin: 10px 2px 0; font-size: 12px; color: var(--yp-muted); line-height: 1.4; }
+.yp-accs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 760px) { .yp-accs { grid-template-columns: 1fr; } }
+.yp-acc { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-radius: 14px; background: var(--yp-surface-2); }
+.yp-acc-logo { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.yp-acc.yt .yp-acc-logo { background: rgba(255, 0, 51, .14); color: #ff3355; }
+.yp-acc.yt .yp-acc-logo path { fill-rule: evenodd; }
+.yp-acc.sc .yp-acc-logo { background: rgba(255, 122, 26, .14); }
+.yp-acc-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.yp-acc-txt b { font-size: 14px; }
+.yp-acc-txt small { font-size: 12px; color: var(--yp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yp-acc-txt small.ok { color: #3ddc84; }
+.yp-acc .yp-btn, .yp-acc .yp-h-ghost { height: 34px; padding: 0 14px; font-size: 12px !important; flex: none; }
+.yp-viz-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-radius: 14px; background: var(--yp-surface-2); flex-wrap: wrap; }
+.yp-viz-row b { display: block; font-size: 14px; } .yp-viz-row small { font-size: 12px; color: var(--yp-muted); }
+
+/* ── Now Playing: like / dislike ── */
+.yp-np-acts { display: none; gap: 6px; margin-top: 12px; }
+#yp-lyrics.full .yp-np-acts { display: flex; }
+#yp-lyrics.full .yp-ly-meta { position: relative; }
+.yp-np-act { width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: var(--yp-muted) !important;
+  background: var(--yp-surface-2) !important; transition: transform .3s var(--yp-spring), color .2s, background-color .2s !important; }
+.yp-np-act:hover { color: var(--yp-text) !important; transform: scale(1.08); }
+.yp-np-act.like.on { color: #ff4d6d !important; background: rgba(255, 77, 109, .14) !important; }
+.yp-np-act.dislike.on { color: var(--yp-text) !important; background: color-mix(in srgb, var(--yp-text) 16%, transparent) !important; }
+.yp-np-act.pop { animation: yp-pop .45s var(--yp-spring); }
+@keyframes yp-pop { 40% { transform: scale(1.3); } }
+#yp-lyrics.full .yp-ly-meta { width: min(32vw, 54vh, 460px); }
+#yp-lyrics.full .yp-np-acts { position: absolute; right: 0; top: 0; margin: 0; }
+
+/* sleep timer chip */
+.yp-np-extra { display: flex; justify-content: center; margin-top: 14px; }
+.yp-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--yp-surface-2) !important; color: var(--yp-muted) !important; font: 600 12px/1 sans-serif; font-family: inherit; transition: color .2s, background-color .2s, transform .25s var(--yp-spring) !important; }
+.yp-chip:hover { color: var(--yp-text) !important; transform: translateY(-1px); }
+.yp-chip.on { color: var(--yp-text) !important; background: color-mix(in srgb, var(--yp-accent) 22%, transparent) !important; }
+
+/* queue tabs: Очередь | Не нравится */
+.yp-q-head { align-items: center; }
+.yp-q-tab { border: 0; background: none; cursor: pointer; padding: 0; margin-right: 18px; color: var(--yp-muted); font: 800 22px/1.2 sans-serif; font-family: inherit; letter-spacing: -.02em; transition: color .2s; }
+.yp-q-tab.on { color: var(--yp-text); }
+.yp-q-tab i { font-style: normal; font-size: 12px; font-weight: 700; margin-left: 6px; padding: 2px 7px; border-radius: 999px; background: var(--yp-surface-2); vertical-align: 4px; }
+.yp-q-tab i:empty { display: none; }
+.yp-q-head .yp-q-tab ~ span { margin-left: auto; }
+#yp-lyrics.q-dis .yp-sc-add { display: none; }
+.yp-q-dis { grid-template-columns: 28px 44px 1fr auto; }
+.yp-q-dis .yp-q-n { color: var(--yp-muted); display: grid; place-items: center; }
+
+/* ── update prompt ── */
+#yp-upd-wrap { position: fixed; inset: 0; z-index: 3100; display: grid; place-items: center; background: rgba(0,0,0,0); transition: background .3s; }
+#yp-upd-wrap.open { background: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.yp-upd { width: min(420px, 90vw); text-align: center; padding: 28px 26px 22px; }
+#yp-upd-wrap.open .yp-upd { opacity: 1; transform: none; }
+.yp-upd-ic { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 20px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--yp-accent), #6a2bd9); box-shadow: 0 12px 30px color-mix(in srgb, var(--yp-accent) 40%, transparent); }
+.yp-upd h2 { margin: 0 0 6px; font: 800 20px/1.2 sans-serif; font-family: inherit; }
+.yp-upd p { margin: 0 0 14px; color: var(--yp-muted); font-size: 13px; line-height: 1.4; }
+.yp-upd-bar { height: 6px; border-radius: 6px; background: var(--yp-surface-2); overflow: hidden; margin: 0 0 16px; opacity: 0; transition: opacity .2s; }
+.yp-upd-bar.on { opacity: 1; }
+.yp-upd-bar i { display: block; height: 100%; width: 0; background: var(--yp-accent); border-radius: inherit; transition: width .3s ease; }
+.yp-upd-btns { display: flex; gap: 10px; justify-content: center; }
+.yp-upd-btns .yp-btn, .yp-upd-btns .yp-h-ghost { height: 42px; padding: 0 20px; }

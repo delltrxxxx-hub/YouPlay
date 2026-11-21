@@ -3,7 +3,7 @@
    DOM is touched via safe APIs only (no innerHTML: YT Music enforces Trusted Types). */
 
 // ═════════════════════════ 1. Bridge to the extension background ═════════════════════════
-const DEFAULT_SETTINGS = { theme: 'studio', accent: '#ff5a36', visualizer: 'bars', subtitles: false, nowPlayingToast: false, autoNowPlaying: true, audioOnly: true, adblock: true, hideSide: false };
+const DEFAULT_SETTINGS = { theme: 'studio', accent: '#ff5a36', visualizer: 'off', subtitles: false, nowPlayingToast: false, autoNowPlaying: true, audioOnly: true, adblock: true, hideSide: true };
 const _listeners = {};
 const ipcRenderer = {
   invoke(ch, arg) {
@@ -31,7 +31,7 @@ function h(tag, props, ...kids) {
   if (props) for (const [k, v] of Object.entries(props)) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) el.style.setProperty(sk, String(sv)); else el.style[sk] = sv; } }
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'text') el.textContent = v;
     else el.setAttribute(k, v === true ? '' : v);
@@ -47,6 +47,11 @@ function icon(d, size = 22) {
 }
 const I = {
   lyrics: 'M12 3a4 4 0 0 1 4 4v5a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4zm7 9a7 7 0 0 1-6 6.92V21h-2v-2.08A7 7 0 0 1 5 12h2a5 5 0 0 0 10 0h2z',
+  gear: 'M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.3 7.3 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.5 8.8a.5.5 0 0 0 .1.6l2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l1.9 3.3c.1.2.4.3.6.2l2.4-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.3.4.5.4h3.8c.2 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z',
+  broken: 'M12 20.6c-.2 0-.3 0-.5-.1C11.2 20.3 3.5 15.7 3.5 9.5a5.3 5.3 0 0 1 8.3-4.3l-1.6 4.1 3 1.8-1.4 3.6 3.6-4.4-3-1.9 1.4-2.6A5.3 5.3 0 0 1 20.5 9.5c0 6.2-7.7 10.8-8 11-.2.1-.3.1-.5.1z',
+  heartLine: 'M12 20.6c-.2 0-.3 0-.5-.1C11.2 20.3 3.5 15.7 3.5 9.5a5.3 5.3 0 0 1 8.5-4.2 5.3 5.3 0 0 1 8.5 4.2c0 6.2-7.7 10.8-8 11-.2.1-.3.1-.5.1zM12 7.6l-.8-.7a3.3 3.3 0 0 0-5.7 2.6c0 4.3 5 8 6.5 9 1.5-1 6.5-4.7 6.5-9a3.3 3.3 0 0 0-5.7-2.6z',
+  moon: 'M20 15.3A8.5 8.5 0 0 1 8.7 4a8.5 8.5 0 1 0 11.3 11.3z',
+  user: 'M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4.4 0-8 2.2-8 5v1.5h16V19c0-2.8-3.6-5-8-5z',
   spark: 'M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2zm7 11l.95 2.55L22.5 16.5l-2.55.95L19 20l-.95-2.55L15.5 16.5l2.55-.95L19 13zM5 14l.7 1.8L7.5 16.5l-1.8.7L5 19l-.7-1.8-1.8-.7 1.8-.7L5 14z',
   close: 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
   expand: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
@@ -68,7 +73,22 @@ const send = (ch, ...a) => ipcRenderer.send(ch, ...a);
 
 // ═════════════════════════ 3. State ═════════════════════════
 let S = { autoNowPlaying: true, theme: 'glass', accent: '#ff3d77', visualizer: 'bars', subtitles: true, nowPlayingToast: true, adblock: true, version: '' };
-const ready = ipcRenderer.invoke('yp:get-settings').then((s) => { if (!s.subsOff2) { s.subtitles = false; chrome.storage.local.set({ subtitles: false, subsOff2: true }); } S = { ...S, ...s }; applyTheme(); return S; });
+// settings are also mirrored into this site's own storage, so they survive anything that resets the extension
+const BACKUP_KEY = 'youplay-settings-backup';
+const ready = chrome.storage.local.get(null).then(async (raw) => {
+  if (!raw.defaultsV3 && !raw.subsOff2) {   // fresh extension storage: restore the backup if there is one
+    try { const b = JSON.parse(localStorage.getItem(BACKUP_KEY) || 'null'); if (b && typeof b === 'object') { await chrome.storage.local.set(b); raw = { ...b, ...raw }; } } catch {}
+  }
+  if (!raw.defaultsV3) {                    // new defaults (once): Studio, no visualizer, right panel hidden
+    Object.assign(raw, { theme: 'studio', visualizer: 'off', hideSide: true, defaultsV3: true });
+    await chrome.storage.local.set({ theme: 'studio', visualizer: 'off', hideSide: true, defaultsV3: true });
+  }
+  if (!raw.subsOff2) { raw.subtitles = false; chrome.storage.local.set({ subtitles: false, subsOff2: true }); }
+  return ipcRenderer.invoke('yp:get-settings');
+}).then((s) => { S = { ...S, ...s }; applyTheme(); backupSettings(); return S; });
+function backupSettings() {
+  chrome.storage.local.get(null).then((all) => { try { localStorage.setItem(BACKUP_KEY, JSON.stringify(all)); } catch {} });
+}
 const THEMES = [
   { id: 'studio', name: 'Studio', desc: 'Тёплый минимализм в цветах обложки', sw: ['#ff5a36', '#3a1d14', '#120c0a'] },
   { id: 'glass', name: 'Liquid Glass', desc: 'Стекло, блики и живой фон', sw: ['#ff3d77', '#8b3dff', '#22d3ee'] },
@@ -89,7 +109,7 @@ function applyTheme() {
   root.style.setProperty('--yp-accent', S.accent);
   vizColors = null; // re-read on next frame
 }
-function save(patch) { Object.assign(S, patch); applyTheme(); if (patch.theme) setTimeout(guideMode, 50); return ipcRenderer.invoke('yp:set-settings', patch); }
+function save(patch) { Object.assign(S, patch); applyTheme(); if (patch.theme) setTimeout(guideMode, 50); return ipcRenderer.invoke('yp:set-settings', patch).then((r) => { backupSettings(); return r; }); }
 // Studio uses the slim icon-only side menu: collapse YT Music's full guide once.
 function guideMode() {
   const full = $('#guide-wrapper');
@@ -114,7 +134,7 @@ function buildUI() {
     ui.btnLikes = h('button', { class: 'yp-ic', title: 'Любимое — лайки YouTube Music и SoundCloud вместе', onclick: () => { try { openLikes(); } catch {} } }, icon(I.heart)),
     ui.btnSc = h('button', { class: 'yp-ic', title: 'Добавить из SoundCloud (или просто вставьте ссылку Ctrl+V)', onclick: () => { openNowPlaying(); toggleQueue(true); setTimeout(() => ui.scInput.focus(), 350); } }, icon(I.cloud)),
     ui.btnNow = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран (Ctrl+K)', onclick: () => openNowPlaying() }, icon(I.expand)),
-    ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'YouPlay — оформление и настройки', onclick: () => openSettings() }, icon(I.spark)));
+    ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'Настройки YouPlay (Ctrl+,)', onclick: () => openSettings() }, icon(I.gear)));
 
 
   ui.subs = h('div', { id: 'yp-subs', 'aria-live': 'polite' }, ui.subCur = h('div', { class: 'yp-sub-cur' }), ui.subNext = h('div', { class: 'yp-sub-next' }));
@@ -123,7 +143,10 @@ function buildUI() {
     h('div', { class: 'yp-ly-bg' }, ui.lyBgArt = h('div', { class: 'yp-ly-bgart' })),
     h('header', { class: 'yp-ly-head' },
       ui.lyArt = h('img', { class: 'yp-ly-art', alt: '', title: 'Сейчас играет', onclick: () => openNowPlaying() }),
-      h('div', { class: 'yp-ly-meta' }, ui.lyTitle = h('div', { class: 'yp-ly-title' }), ui.lyArtist = h('div', { class: 'yp-ly-artist' }), ui.npSrc = h('span', { class: 'yp-badge yt', text: 'YouTube Music' })),
+      h('div', { class: 'yp-ly-meta' }, ui.lyTitle = h('div', { class: 'yp-ly-title' }), ui.lyArtist = h('div', { class: 'yp-ly-artist' }), ui.npSrc = h('span', { class: 'yp-badge yt', text: 'YouTube Music' }),
+        h('div', { class: 'yp-np-acts' },
+          ui.npLike = h('button', { class: 'yp-np-act like', title: 'Нравится — сохранить в ваш аккаунт', onclick: () => likeCurrent() }, icon(I.heartLine, 24)),
+          ui.npDislike = h('button', { class: 'yp-np-act dislike', title: 'Не нравится — больше не предлагать этот трек', onclick: () => dislikeCurrent() }, icon(I.broken, 24)))),
       h('div', { class: 'yp-ly-tools' },
         ui.lyFull = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран', onclick: () => setFull(!ui.lyrics.classList.contains('full')) }, icon(I.expand)),
         h('button', { class: 'yp-ic', title: 'Закрыть (Esc)', onclick: () => toggleLyrics(false) }, icon(I.close))),
@@ -136,10 +159,15 @@ function buildUI() {
           ui.npPlay = h('button', { class: 'yp-ic yp-np-play', title: 'Играть / пауза', onclick: () => { if (scOn()) scPost('toggle'); else clickBar('#play-pause-button'); } }, icon(I.pause, 30)),
           h('button', { class: 'yp-ic', title: 'Далее', onclick: () => clickBar('.next-button') }, icon(I.next, 24)),
           h('button', { class: 'yp-ic', title: 'Повтор', onclick: () => clickBar('.repeat') }, icon(I.repeat, 20)),
-          ui.btnQueue = h('button', { class: 'yp-ic', title: 'Очередь', onclick: () => toggleQueue() }, icon(I.queue, 20))))),
+          ui.btnQueue = h('button', { class: 'yp-ic', title: 'Очередь', onclick: () => toggleQueue() }, icon(I.queue, 20))),
+        h('div', { class: 'yp-np-extra' },
+          ui.btnSleep = h('button', { class: 'yp-chip', title: 'Таймер сна', onclick: () => cycleSleep() }, icon(I.moon, 15), ui.sleepLabel = h('span', { text: 'Таймер сна' }))))),
     ui.lyScroll = h('div', { class: 'yp-ly-scroll' }, ui.lyList = h('div', { class: 'yp-ly-list' })),
     ui.queue = h('div', { class: 'yp-queue' },
-      h('div', { class: 'yp-q-head' }, h('b', { text: 'Очередь' }), ui.qCount = h('span')),
+      h('div', { class: 'yp-q-head' },
+        ui.qTabQ = h('button', { class: 'yp-q-tab on', text: 'Очередь', onclick: () => setQueueTab('q') }),
+        ui.qTabD = h('button', { class: 'yp-q-tab', onclick: () => setQueueTab('dis') }, 'Не нравится', ui.qDisN = h('i')),
+        ui.qCount = h('span')),
       h('div', { class: 'yp-sc-add' },
         h('span', { class: 'yp-cloud big' }),
         ui.scInput = h('input', { type: 'url', placeholder: 'Ссылка SoundCloud на трек или плейлист — Enter', spellcheck: 'false',
@@ -199,7 +227,112 @@ function ytQueueItems() {
   const q = $('ytmusic-player-page ytmusic-player-queue') || $('ytmusic-player-queue');
   return q ? [...q.querySelectorAll('ytmusic-player-queue-item')].filter((x) => x.offsetParent !== null || x.closest('#contents')) : [];
 }
+let queueTab = 'q';
+function setQueueTab(t) { queueTab = t; ui.qTabQ.classList.toggle('on', t === 'q'); ui.qTabD.classList.toggle('on', t === 'dis'); ui.lyrics.classList.toggle('q-dis', t === 'dis'); renderQueue(); }
+
+// ── likes that go to your account (YouTube Music or SoundCloud) and dislikes ──
+let disliked = [];
+ready.then(() => chrome.storage.local.get('disliked')).then((o) => { disliked = o.disliked || []; updDisN(); });
+function updDisN() { if (ui.qDisN) ui.qDisN.textContent = disliked.length ? String(disliked.length) : ''; }
+function nowItem() {
+  if (scOn() && SC.current) return { src: 'sc', id: SC.current.url, title: SC.current.title, artist: SC.current.artist, art: SC.current.art };
+  let vid = ''; try { vid = curVideoId; } catch {}
+  return vid ? { src: 'yt', id: vid, title: track.title || '', artist: track.artist || '', art: track.art || '' } : null;
+}
+const isDisliked = (src, id) => !!id && disliked.some((d) => d.src === src && d.id === id);
+function ytLikeBtn(kind) {
+  return $('ytmusic-player-bar ytmusic-like-button-renderer button[aria-label="' + (kind === 'like' ? 'Нравится' : 'Не нравится') + '"], ytmusic-player-bar ytmusic-like-button-renderer button[aria-label="' + (kind === 'like' ? 'Like' : 'Dislike') + '"]');
+}
+function scIsLiked(url) { try { return HUB.likes.sc.some((x) => x.url === url); } catch { return false; } }
+function syncLikeState() {
+  if (!ui.npLike) return;
+  const it = nowItem();
+  let liked = false, dis = false;
+  if (it && it.src === 'yt') { const l = ytLikeBtn('like'), d = ytLikeBtn('dislike'); liked = !!l && l.getAttribute('aria-pressed') === 'true'; dis = !!d && d.getAttribute('aria-pressed') === 'true'; }
+  else if (it) liked = scIsLiked(it.id);
+  if (it) dis = dis || isDisliked(it.src, it.id);
+  ui.npLike.classList.toggle('on', liked); ui.npDislike.classList.toggle('on', dis);
+  ui.npLike.replaceChildren(icon(liked ? I.heart : I.heartLine, 24));
+}
+async function likeCurrent() {
+  const it = nowItem(); if (!it) return;
+  ui.npLike.classList.add('pop'); setTimeout(() => ui.npLike.classList.remove('pop'), 450);
+  if (it.src === 'yt') {
+    const b = ytLikeBtn('like'); if (!b) return;
+    const was = b.getAttribute('aria-pressed') === 'true';
+    b.click();
+    setTimeout(syncLikeState, 500);
+    toast(h('div', { class: 'yp-tt' }, h('span', { class: 'yp-badge yt', text: 'YouTube Music' }), h('span', { text: was ? 'Убрано из понравившихся' : '♥ Сохранено в ваш аккаунт YouTube Music' })), { id: 'like', timeout: 2200 });
+  } else {
+    const liked = scIsLiked(it.id);
+    ui.npLike.classList.toggle('on', !liked); ui.npLike.replaceChildren(icon(!liked ? I.heart : I.heartLine, 24));
+    const r = await scJob(liked ? 'unlike' : 'like', it.id);
+    if (r.login === false) { syncLikeState(); try { scConnectPrompt(); } catch {} return; }
+    if (!r.ok) { syncLikeState(); toast(h('div', { class: 'yp-tt' }, h('span', { text: 'SoundCloud не принял лайк, попробуйте ещё раз' })), { timeout: 2500 }); return; }
+    try {
+      if (liked) HUB.likes.sc = HUB.likes.sc.filter((x) => x.url !== it.id);
+      else HUB.likes.sc.unshift({ src: 'sc', url: it.id, title: it.title, artist: it.artist, art: it.art, likedAt: new Date().toISOString() });
+      chrome.storage.local.set({ scLikes: { login: true, user: HUB.likes.scUser, items: HUB.likes.sc, at: Date.now() } });
+    } catch {}
+    syncLikeState();
+    toast(h('div', { class: 'yp-tt' }, h('span', { class: 'yp-badge sc', text: 'SoundCloud' }), h('span', { text: liked ? 'Убрано из лайков SoundCloud' : '♥ Сохранено в ваш аккаунт SoundCloud' })), { id: 'like', timeout: 2200 });
+  }
+}
+function dislikeCurrent() {
+  const it = nowItem(); if (!it) return;
+  if (isDisliked(it.src, it.id)) { undislike(it.src, it.id); return; }
+  disliked.unshift({ ...it, at: Date.now() });
+  chrome.storage.local.set({ disliked }); updDisN(); backupSettings();
+  if (it.src === 'yt') { const d = ytLikeBtn('dislike'); if (d && d.getAttribute('aria-pressed') !== 'true') d.click(); }   // YouTube Music stops recommending it
+  toast(h('div', { class: 'yp-tt' }, h('span', { text: 'Больше не предложу: ' + (it.title || 'трек') }),
+    h('button', { class: 'yp-btn', text: 'Отменить', onclick: (e) => { undislike(it.src, it.id); dismiss(e.target.closest('.yp-toast')); } })), { id: 'dis', timeout: 5000 });
+  skipCurrent();
+}
+function undislike(src, id) {
+  disliked = disliked.filter((d) => !(d.src === src && d.id === id));
+  chrome.storage.local.set({ disliked }); updDisN(); backupSettings(); syncLikeState(); renderQueue();
+}
+function skipCurrent() { if (scOn()) scFinished(); else clickBar('.next-button'); }
+function renderDisliked() {
+  ui.qCount.textContent = '';
+  if (!disliked.length) { ui.qList.replaceChildren(h('div', { class: 'yp-ly-msg' }, h('span', { text: 'Здесь будут треки с разбитым сердечком. YouPlay их пропускает и больше не предлагает.' }))); return; }
+  ui.qList.replaceChildren(...disliked.map((d) => h('div', { class: 'yp-q-item yp-q-dis' },
+    h('span', { class: 'yp-q-n' }, icon(I.broken, 16)),
+    h('img', { src: d.art || (d.src === 'yt' ? 'https://i.ytimg.com/vi/' + d.id + '/mqdefault.jpg' : ''), alt: '', loading: 'lazy' }),
+    h('span', { class: 'yp-q-meta' }, h('b', { text: d.title || 'Трек' }), h('small', {}, h('span', { class: 'yp-badge ' + d.src, text: d.src === 'sc' ? 'SoundCloud' : 'YouTube Music' }), ' ' + (d.artist || ''))),
+    h('button', { class: 'yp-chip', text: 'Вернуть', title: 'Снова можно предлагать', onclick: () => undislike(d.src, d.id) }))));
+}
+
+// ── sleep timer ──
+let sleepAt = 0, sleepEnd = false;
+const SLEEP_STEPS = [15, 30, 60, 'end', 0];
+let sleepStep = SLEEP_STEPS.length - 1;
+function cycleSleep() {
+  sleepStep = (sleepStep + 1) % SLEEP_STEPS.length;
+  const next = SLEEP_STEPS[sleepStep];
+  sleepEnd = next === 'end';
+  sleepAt = typeof next === 'number' && next ? Date.now() + next * 60000 : 0;
+  showSleep();
+  toast(h('div', { class: 'yp-tt' }, icon(I.moon, 18), h('span', { text: next === 0 ? 'Таймер сна выключен' : next === 'end' ? 'Пауза после этого трека' : 'Пауза через ' + next + ' мин' })), { id: 'sleep', timeout: 1800 });
+}
+function showSleep() {
+  if (!ui.sleepLabel) return;
+  ui.btnSleep.classList.toggle('on', !!(sleepAt || sleepEnd));
+  ui.sleepLabel.textContent = sleepEnd ? 'До конца трека' : sleepAt ? Math.max(1, Math.ceil((sleepAt - Date.now()) / 60000)) + ' мин' : 'Таймер сна';
+}
+function sleepNow() {
+  sleepAt = 0; sleepEnd = false; sleepStep = SLEEP_STEPS.length - 1; showSleep();
+  if (scOn()) scPost('pause'); else if (video) video.pause();
+  toast(h('div', { class: 'yp-tt' }, icon(I.moon, 18), h('span', { text: 'Спокойной ночи — музыка на паузе' })), { id: 'sleep', timeout: 4000 });
+}
+function sleepTick() {
+  if (sleepAt && Date.now() >= sleepAt) sleepNow();
+  if (sleepEnd && !scOn() && video && !video.paused && isFinite(video.duration) && video.duration - video.currentTime < 0.6 && video.currentTime > 1) sleepNow();
+  if (sleepAt) showSleep();
+}
+
 function renderQueue() {
+  if (queueOpen && queueTab === 'dis') { renderDisliked(); return; }
   if (!queueOpen) return;
   try { if (hubRenderQueue()) return; } catch {}
   const items = ytQueueItems();
@@ -294,6 +427,30 @@ function animatedText(text, cls = '') {
   return w;
 }
 let modal = null;
+function ytSignedIn() {
+  if ($('ytmusic-nav-bar a.sign-in-link, ytmusic-nav-bar a[href*="ServiceLogin"]')) return false;
+  return !!$('ytmusic-nav-bar ytmusic-settings-button img, ytmusic-nav-bar .right-content img#img');
+}
+function accountRow(kind) {
+  const isYt = kind === 'yt';
+  const box = h('div', { class: 'yp-acc ' + kind });
+  const paint = () => {
+    let on, who;
+    if (isYt) { on = ytSignedIn(); who = on ? 'Аккаунт Google подключён' : 'Не выполнен вход'; }
+    else { let st = null, user = ''; try { st = HUB.likes.scLogin; user = HUB.likes.scUser; } catch {} on = st === true; who = st === true ? ('Подключён' + (user ? ' — ' + user : '')) : st === false ? 'Не выполнен вход' : 'Проверяю…'; }
+    box.replaceChildren(
+      h('span', { class: 'yp-acc-logo' }, isYt ? icon('M10 15.5v-7l6 3.5-6 3.5zM12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 26) : h('span', { class: 'yp-cloud big' })),
+      h('span', { class: 'yp-acc-txt' }, h('b', { text: isYt ? 'YouTube Music' : 'SoundCloud' }), h('small', { class: on ? 'ok' : '', text: (on ? '✓ ' : '') + who })),
+      isYt
+        ? (on ? h('button', { class: 'yp-h-ghost', text: 'Сменить или выйти', onclick: () => { closeSettings(); const av = $('ytmusic-nav-bar ytmusic-settings-button tp-yt-paper-icon-button, ytmusic-nav-bar ytmusic-settings-button'); if (av) av.click(); } })
+              : h('button', { class: 'yp-btn', text: 'Войти', onclick: () => { closeSettings(); const l = $('ytmusic-nav-bar a.sign-in-link, a.sign-in-link'); if (l) l.click(); } }))
+        : (on ? h('button', { class: 'yp-h-ghost', text: 'Выйти', onclick: () => { sendHost('sclogout'); try { HUB.likes.scLogin = false; HUB.likes.sc = []; chrome.storage.local.set({ scLikes: { login: false, items: [], at: Date.now() } }); } catch {} paint(); } })
+              : h('button', { class: 'yp-btn', text: 'Войти', onclick: () => sendHost('sclogin') })));
+  };
+  paint();
+  box._paint = paint;
+  return box;
+}
 function openSettings() {
   if (modal) return closeSettings();
   const cards = h('div', { class: 'yp-themes' });
@@ -316,24 +473,30 @@ function openSettings() {
 
   const updStatus = h('span', { class: 'yp-upd-status', text: updateText(lastUpdate) || ('Версия ' + S.version) });
   ui.updStatus = updStatus;
+  const accYt = accountRow('yt'), accSc = accountRow('sc');
+  // refresh the SoundCloud status in the background
+  try { scJob('status').then((r) => { if (r && typeof r.login === 'boolean') { HUB.likes.scLogin = r.login; if (r.user) HUB.likes.scUser = r.user; } accSc._paint(); }); } catch {}
+  const opt = (title, desc, value, onChange) => h('label', {}, h('span', {}, h('b', { text: title }), h('small', { text: desc })), toggle(value, onChange));
 
   const panel = h('div', { class: 'yp-modal', role: 'dialog', 'aria-label': 'Настройки YouPlay' },
-    h('header', {}, animatedText('YouPlay', 'yp-logo'), h('span', { class: 'yp-ver', text: 'v' + S.version }),
-      h('button', { class: 'yp-ic', title: 'Закрыть', onclick: closeSettings }, icon(I.close))),
-    h('section', {}, h('h3', { text: 'Стиль' }), cards),
-    h('section', {}, h('h3', { text: 'Акцентный цвет' }), accents),
-    h('section', {}, h('h3', { text: 'Визуализатор под бас' }),
-      seg([['bars', 'Полосы'], ['wave', 'Волна'], ['glow', 'Свечение'], ['off', 'Выкл']], S.visualizer, (v) => { save({ visualizer: v }); ensureAudio(); kick(); })),
-    h('section', { class: 'yp-rows' },
-      h('label', {}, h('span', {}, h('b', { text: 'Субтитры' }), h('small', { text: 'Синхронный текст поверх плеера' })), toggle(S.subtitles, (v) => { save({ subtitles: v }); renderSubs(true); })),
-      h('label', {}, h('span', {}, h('b', { text: 'Треки вместо клипов' }), h('small', { text: 'Если включился клип, сразу переключать на аудиоверсию' })), toggle(S.audioOnly !== false, (v) => save({ audioOnly: v }))),
-      h('label', {}, h('span', {}, h('b', { text: 'Скрыть правую панель' }), h('small', { text: 'Убирает очередь, текст и похожие треки на экране плеера' })), toggle(S.hideSide, (v) => save({ hideSide: v }))),
-      h('label', {}, h('span', {}, h('b', { text: 'Открывать «Сейчас играет» при запуске трека' }), h('small', { text: 'Полноэкранный плеер с текстом и очередью' })), toggle(S.autoNowPlaying, (v) => save({ autoNowPlaying: v }))),
-      h('label', {}, h('span', {}, h('b', { text: 'Карточка при смене трека' }), h('small', { text: 'Небольшое уведомление сверху' })), toggle(S.nowPlayingToast, (v) => save({ nowPlayingToast: v }))),
-      h('label', {}, h('span', {}, h('b', { text: 'Блокировка рекламы' }), h('small', { text: 'Сетевой фильтр + вырезание рекламы из плеера (перезапуск)' })), toggle(S.adblock, (v) => save({ adblock: v })))),
+    h('header', {}, icon(I.gear, 26), h('span', { class: 'yp-set-title', text: 'Настройки' }), h('span', { class: 'yp-ver', text: 'YouPlay ' + S.version }),
+      h('button', { class: 'yp-ic', title: 'Закрыть (Esc)', onclick: closeSettings }, icon(I.close))),
+    h('section', {}, h('h3', { text: 'Аккаунты' }), h('div', { class: 'yp-accs' }, accYt, accSc),
+      h('p', { class: 'yp-hint', text: 'С SoundCloud лайки обоих сервисов собираются в «Любимое», а сердечко в плеере сохраняет трек в нужный аккаунт.' })),
+    h('section', {}, h('h3', { text: 'Оформление' }), cards, h('div', { class: 'yp-sub-h', text: 'Акцентный цвет' }), accents),
+    h('section', { class: 'yp-rows' }, h('h3', { text: 'Воспроизведение' }),
+      opt('Открывать «Сейчас играет» при запуске трека', 'Полноэкранный плеер с текстом, очередью и лайками', S.autoNowPlaying, (v) => save({ autoNowPlaying: v })),
+      opt('Треки вместо клипов', 'Если включился клип, сразу переключать на аудиоверсию', S.audioOnly !== false, (v) => save({ audioOnly: v })),
+      opt('Скрыть правую панель', 'Убирает очередь, текст и «Похожие» с экрана плеера YouTube Music', S.hideSide, (v) => save({ hideSide: v })),
+      opt('Блокировка рекламы', 'Фильтр и вырезание рекламы из плеера (страница перезагрузится)', S.adblock, (v) => save({ adblock: v }))),
+    h('section', { class: 'yp-rows' }, h('h3', { text: 'Текст и визуализатор' }),
+      opt('Субтитры внизу экрана', 'Строка текста с подсветкой поверх плеера (Ctrl+J)', S.subtitles, (v) => { save({ subtitles: v }); renderSubs(true); }),
+      opt('Карточка при смене трека', 'Небольшое уведомление сверху', S.nowPlayingToast, (v) => save({ nowPlayingToast: v })),
+      h('div', { class: 'yp-viz-row' }, h('span', {}, h('b', { text: 'Визуализатор под бас' }), h('small', { text: 'Полосы или волна внизу экрана' })),
+        seg([['off', 'Выкл'], ['bars', 'Полосы'], ['wave', 'Волна'], ['glow', 'Свечение']], S.visualizer, (v) => { save({ visualizer: v }); ensureAudio(); kick(); }))),
     h('footer', {},
       updStatus,
-      h('button', { class: 'yp-btn', onclick: () => { updStatus.textContent = 'Проверяю…'; send('yp:check-update'); } }, icon(I.update, 18), h('span', { text: 'Проверить обновления' }))));
+      h('button', { class: 'yp-btn', onclick: () => { updStatus.textContent = 'Проверяю…'; updPromptShown = false; sendHost('update-check'); } }, icon(I.update, 18), h('span', { text: 'Проверить обновления' }))));
 
   modal = h('div', { id: 'yp-modal-wrap', onclick: (e) => { if (e.target === modal) closeSettings(); } }, panel);
   ui.root.append(modal);
@@ -375,12 +538,44 @@ function updateText(u) {
   switch (u.state) {
     case 'checking': return 'Проверяю обновления…';
     case 'none': return u.dev ? 'Режим разработки — обновления выключены' : 'У вас последняя версия ✓';
-    case 'available': return `Вышла версия ${u.version} — установится сама, когда вы закроете YouPlay`;
+    case 'available': return `Вышла версия ${u.version}`;
+    case 'downloading': return `Скачиваю обновление… ${u.percent || 0}%`;
+    case 'installing': return 'Устанавливаю обновление…';
+    case 'dev': return 'Тестовая копия — обновления выключены';
     case 'error': return 'Не удалось проверить обновления';
   }
   return '';
 }
 let updToastShown = false;
+// ── update prompt (state from the YouPlay window) ──
+let updPromptShown = false, updModal = null;
+window.addEventListener('message', (e) => {
+  if (e.source !== window || !e.data || !e.data.ypUpdate) return;
+  const u = e.data.ypUpdate;
+  lastUpdate = u;
+  if (ui.updStatus) ui.updStatus.textContent = updateText(u);
+  if (u.state === 'available' && !updPromptShown) { updPromptShown = true; showUpdatePrompt(u); }
+  if (updModal) paintUpdate(u);
+});
+function showUpdatePrompt(u) {
+  if (updModal) return;
+  updModal = h('div', { id: 'yp-upd-wrap' },
+    h('div', { class: 'yp-modal yp-upd' },
+      h('div', { class: 'yp-upd-ic' }, icon(I.update, 34)),
+      h('h2', { text: 'Вышло обновление YouPlay' }),
+      ui.updLine = h('p', { text: `Версия ${u.version} (у вас ${u.current}). Ваш вход и настройки сохранятся.` }),
+      ui.updBar = h('div', { class: 'yp-upd-bar' }, h('i')),
+      h('div', { class: 'yp-upd-btns' },
+        ui.updLater = h('button', { class: 'yp-h-ghost', text: 'Позже', onclick: () => { updModal.remove(); updModal = null; } }),
+        ui.updGo = h('button', { class: 'yp-btn', text: 'Обновить сейчас', onclick: () => { sendHost('update-now'); } }))));
+  ui.root.append(updModal);
+  requestAnimationFrame(() => updModal.classList.add('open'));
+}
+function paintUpdate(u) {
+  if (u.state === 'downloading') { ui.updLine.textContent = 'Скачиваю… ' + (u.percent || 0) + '%'; ui.updBar.classList.add('on'); ui.updBar.firstChild.style.width = (u.percent || 0) + '%'; ui.updGo.disabled = true; ui.updLater.disabled = true; }
+  if (u.state === 'installing') { ui.updLine.textContent = 'Устанавливаю — YouPlay сейчас перезапустится'; ui.updBar.firstChild.style.width = '100%'; }
+  if (u.state === 'error') { ui.updLine.textContent = 'Не получилось скачать обновление. Попробуйте ещё раз.'; ui.updGo.disabled = false; ui.updLater.disabled = false; }
+}
 ipcRenderer.on('yp:update', (_e, u) => {
   lastUpdate = u;
   if (ui.updStatus) ui.updStatus.textContent = updateText(u);
@@ -797,6 +992,8 @@ function dismissUpsells() {
 }
 function watchdog() {
   searchSync();
+  syncLikeState();
+  sleepTick();
   preferAudio();
   dismissUpsells();
   const v = $('video'); if (v) attachVideo(v);
@@ -819,13 +1016,14 @@ function boot() {
     }, true);
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.code === 'KeyL') { e.preventDefault(); toggleLyrics(); }
+      else if (e.code === 'Space' && scOn() && !e.target.closest('input, textarea, [contenteditable="true"]')) { e.preventDefault(); e.stopPropagation(); scPost('toggle'); }
       else if (e.ctrlKey && e.code === 'KeyK') { e.preventDefault(); if (ui.lyrics.classList.contains('full')) toggleLyrics(false); else openNowPlaying(); }
       else if (e.ctrlKey && e.code === 'KeyJ') { e.preventDefault(); toggleSubs(); }
       else if (e.ctrlKey && e.code === 'Comma') { e.preventDefault(); openSettings(); }
       else if (e.key === 'Escape') { if (modal) closeSettings(); else if (ui.lyrics.classList.contains('full')) setFull(false); else if (lyricsOpen) toggleLyrics(false); }
     }, true);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
-    chrome.runtime.sendMessage({ type: 'update-status' }).then((u) => { if (u) ipcRenderer.emit('yp:update', null, u); }).catch(() => {});
+    sendHost('update-status');
     watchdog();
     setTimeout(guideMode, 1200); setTimeout(guideMode, 4000);
   });

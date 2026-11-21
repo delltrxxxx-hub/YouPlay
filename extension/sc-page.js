@@ -4,7 +4,7 @@
    The answer goes back to YouPlay as scdata:{json} through bridge.js. */
 (function () {
   // not signed in: SoundCloud redirects to /signin and keeps our task only inside redirect_url
-  const task = /#yp=(search|likes|like):([A-Za-z0-9_-]+)/.exec(location.hash) || /#yp=(search|likes|like):([A-Za-z0-9_-]+)/.exec(decodeURIComponent(location.search));
+  const task = /#yp=(search|likes|like|unlike|status):([A-Za-z0-9_-]+)/.exec(location.hash) || /#yp=(search|likes|like|unlike|status):([A-Za-z0-9_-]+)/.exec(decodeURIComponent(location.search));
   if (!task) return;
   if (/^\/signin/.test(location.pathname) && task[1] !== 'search') {
     const answer = () => { document.documentElement.dataset.ypMsg = JSON.stringify({ t: Date.now(), m: 'scdata:' + JSON.stringify({ id: task[2], op: task[1], login: false }) }); };
@@ -61,16 +61,23 @@
     finish({ login: true, user: (me && me.json && me.json.username) || '', items });
   }
 
+  async function doStatus() {
+    for (let i = 0; i < 16 && !caps.some((c) => /\/me(\?|$)/.test(c.url)); i++) await wait(250);
+    const me = caps.find((c) => /\/me(\?|$)/.test(c.url));
+    finish({ login: loggedIn(), user: (me && me.json && me.json.username) || '' });
+  }
   async function doLike() {
+    const want = op !== 'unlike';
     await wait(1200);
     if (!loggedIn()) { finish({ login: false }); return; }
     for (let i = 0; i < 30; i++) {
       cookies();
       const b = document.querySelector('.listenEngagement .sc-button-like, .soundActions .sc-button-like, .sc-button-like');
       if (b) {
-        if (!b.classList.contains('sc-button-selected')) b.click();
-        await wait(800);
-        finish({ ok: true, liked: b.classList.contains('sc-button-selected') });
+        if (b.classList.contains('sc-button-selected') !== want) b.click();
+        await wait(900);
+        const now = b.classList.contains('sc-button-selected');
+        finish({ ok: now === want, liked: now });
         return;
       }
       await wait(300);
@@ -78,6 +85,6 @@
     finish({ ok: false });
   }
 
-  const run = () => { (op === 'search' ? doSearch : op === 'likes' ? doLikes : doLike)().catch((e) => finish({ error: String(e) })); };
+  const run = () => { (op === 'search' ? doSearch : op === 'likes' ? doLikes : op === 'status' ? doStatus : doLike)().catch((e) => finish({ error: String(e) })); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true }); else run();
 })();

@@ -48,11 +48,9 @@ static class Program
             Directory.CreateDirectory(Data);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            if (Array.IndexOf(args, "--no-update") < 0)
-                Task.Run(() => { try { Thread.Sleep(4000); Updater.Check(); } catch { } });
+            Updater.Enabled = Array.IndexOf(args, "--no-update") < 0;
             Application.Run(new MainWindow());
         }
-        Updater.RunPending(); // a downloaded update installs after the window is closed
     }
 }
 
@@ -142,8 +140,17 @@ class MainWindow : Form
             string ext = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "extension");
             var profile = core.Profile;
             var installed = await profile.GetBrowserExtensionsAsync();
-            foreach (var x in installed) if (x.Name == "YouPlay") await x.RemoveAsync();   // always load the current files
-            await profile.AddBrowserExtensionAsync(ext);
+            string marker = Path.Combine(Program.Data, "extension-version.txt");
+            string had = File.Exists(marker) ? File.ReadAllText(marker).Trim() : "";
+            bool present = false;
+            foreach (var x in installed)
+            {
+                if (x.Name != "YouPlay") continue;
+                if (had != Program.Version) await x.RemoveAsync();          // new version: load the new files
+                else { present = true; if (!x.IsEnabled) await x.EnableAsync(true); }
+            }
+            if (!present) await profile.AddBrowserExtensionAsync(ext);
+            File.WriteAllText(marker, Program.Version);
         }
         catch (Exception ex) { Debug.WriteLine("extension: " + ex.Message); }
 
@@ -172,6 +179,59 @@ class MainWindow : Form
         core.WebMessageReceived += (s, e) => { try { OnMessage(e.TryGetWebMessageAsString() ?? ""); } catch { } };
         core.ContainsFullScreenElementChanged += (s, e) => { if (core.ContainsFullScreenElement != isFull) ToggleFullscreen(); };
         core.Navigate("https://music.youtube.com/");
+        if (Updater.Enabled) Task.Run(() => { Thread.Sleep(3000); try { Updater.Check(); } catch { Updater.State = "error"; } BeginInvoke((Action)PostUpdateState); });
+    }
+
+    // ── updates: ask in the app, then download → close cleanly → install → reopen ──
+    void PostUpdateState()
+    {
+        string v = Updater.LatestTag ?? "";
+        PostToYt("{\"ypUpdate\":{\"state\":" + JsString(Updater.State) + ",\"version\":" + JsString(v) + ",\"current\":" + JsString(Program.Version) + ",\"percent\":" + Updater.Percent + "}}");
+    }
+    void UpdateNow()
+    {
+        if (Updater.State != "available" || Updater.LatestUrl == null) { PostUpdateState(); return; }
+        Updater.State = "downloading"; Updater.Percent = 0; PostUpdateState();
+        string dir = Path.Combine(Program.Data, "Updates");
+        Directory.CreateDirectory(dir);
+        string file = Path.Combine(dir, "YouPlay-Setup-" + Updater.LatestTag + ".exe");
+        var wc = new WebClient();
+        wc.Headers.Add("User-Agent", "YouPlay");
+        wc.DownloadProgressChanged += (s, e) => { if (e.ProgressPercentage != Updater.Percent) { Updater.Percent = e.ProgressPercentage; BeginInvoke((Action)PostUpdateState); } };
+        wc.DownloadFileCompleted += (s, e) => BeginInvoke((Action)(() =>
+        {
+            wc.Dispose();
+            if (e.Error != null || e.Cancelled) { Updater.State = "error"; PostUpdateState(); return; }
+            try
+            {
+                if (File.Exists(file)) File.Delete(file);
+                File.Move(file + ".part", file);
+                Updater.State = "installing"; PostUpdateState();
+                // the installer waits until this window has closed, installs silently and starts YouPlay again
+                Process.Start(new ProcessStartInfo(file, "/S /wait=" + Process.GetCurrentProcess().Id) { UseShellExecute = false });
+                var t = new System.Windows.Forms.Timer { Interval = 900 };
+                t.Tick += (a, b) => { t.Stop(); Close(); };
+                t.Start();
+            }
+            catch { Updater.State = "error"; PostUpdateState(); }
+        }));
+        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+        wc.DownloadFileAsync(new Uri(Updater.LatestUrl), file + ".part");
+    }
+
+    async void ScLogout()
+    {
+        try
+        {
+            var cm = web.CoreWebView2.CookieManager;
+            foreach (var host in new[] { "https://soundcloud.com", "https://secure.soundcloud.com", "https://api-auth.soundcloud.com", "https://api-v2.soundcloud.com" })
+            {
+                var list = await cm.GetCookiesAsync(host);
+                foreach (var c in list) cm.DeleteCookie(c);
+            }
+        }
+        catch { }
+        PostToYt("{\"ypScLogout\":true}");
     }
 
     void OnMessage(string msg)
@@ -188,9 +248,13 @@ class MainWindow : Form
         }
         if (msg == "fullscreen") { ToggleFullscreen(); return; }
         // YouTube Music page asks for SoundCloud data: sc:<op>:<id>:<arg>
-        var j = Regex.Match(msg, "^sc:(search|likes|like):([A-Za-z0-9_-]{1,40}):(.*)$", RegexOptions.Singleline);
+        var j = Regex.Match(msg, "^sc:(search|likes|like|unlike|status):([A-Za-z0-9_-]{1,40}):(.*)$", RegexOptions.Singleline);
         if (j.Success) { scJobs.Enqueue(new[] { j.Groups[1].Value, j.Groups[2].Value, j.Groups[3].Value }); if (scBusy == null) ScNext(); return; }
         if (msg == "sclogin") { ScLogin(); return; }
+        if (msg == "sclogout") { ScLogout(); return; }
+        if (msg == "update-status") { PostUpdateState(); return; }
+        if (msg == "update-check") { if (!Updater.Enabled) { Updater.State = "dev"; PostUpdateState(); return; } Updater.State = "checking"; PostUpdateState(); Task.Run(() => { try { Updater.Check(); } catch { Updater.State = "error"; } BeginInvoke((Action)PostUpdateState); }); return; }
+        if (msg == "update-now") { UpdateNow(); return; }
         // the hidden SoundCloud page answers: scdata:{json}
         if (msg.StartsWith("scdata:"))
         {
@@ -217,7 +281,8 @@ class MainWindow : Form
         string url;
         if (op == "search") url = "https://soundcloud.com/search/sounds?q=" + Uri.EscapeDataString(arg) + "&yp=" + id + "#yp=search:" + id;
         else if (op == "likes") url = "https://soundcloud.com/you/likes?yp=" + id + "#yp=likes:" + id;
-        else if (IsSoundCloud(arg) && arg.StartsWith("https://")) url = arg.Split('#')[0] + (arg.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=like:" + id;
+        else if (op == "status") url = "https://soundcloud.com/you/library?yp=" + id + "#yp=status:" + id;
+        else if (IsSoundCloud(arg) && arg.StartsWith("https://")) url = arg.Split('#')[0] + (arg.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=" + op + ":" + id;
         else { PostToYt("{\"ypScData\":{\"id\":" + JsString(id) + ",\"error\":\"bad\"}}"); ScNext(); return; }
         scBusy = id;
         if (sc.CoreWebView2 == null)
@@ -342,8 +407,13 @@ class MainWindow : Form
 
 static class Updater
 {
+    public static bool Enabled = true;
+    public static string State = "idle";       // idle | checking | none | available | downloading | installing | error | dev
+    public static string LatestTag, LatestUrl;
+    public static int Percent;
     public static void Check()
     {
+        if (!Enabled) { State = "dev"; return; }
         ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
         using (var wc = new WebClient())
         {
@@ -351,32 +421,9 @@ static class Updater
             wc.Headers.Add("Accept", "application/vnd.github+json");
             string json = wc.DownloadString("https://api.github.com/repos/" + Program.Repo + "/releases/latest");
             string tag = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"v?([0-9]+(\\.[0-9]+){1,3})\"").Groups[1].Value;
-            if (tag.Length == 0 || new Version(tag) <= new Version(Program.Version)) return;
             string url = Regex.Match(json, "\"browser_download_url\"\\s*:\\s*\"(https://[^\"]*/YouPlay-Setup-[^\"]*\\.exe)\"").Groups[1].Value;
-            if (url.Length == 0) return;
-            string dir = Path.Combine(Program.Data, "Updates");
-            Directory.CreateDirectory(dir);
-            string file = Path.Combine(dir, "YouPlay-Setup-" + tag + ".exe");
-            wc.Headers.Clear();
-            wc.Headers.Add("User-Agent", "YouPlay");
-            wc.DownloadFile(url, file + ".part");
-            if (File.Exists(file)) File.Delete(file);
-            File.Move(file + ".part", file);
-            File.WriteAllText(Path.Combine(dir, "pending.txt"), file);
+            if (tag.Length > 0 && url.Length > 0 && new Version(tag) > new Version(Program.Version)) { LatestTag = tag; LatestUrl = url; State = "available"; }
+            else State = "none";
         }
-    }
-
-    // called by the installer-less path: on exit, run a downloaded update silently
-    public static void RunPending()
-    {
-        try
-        {
-            var marker = Path.Combine(Program.Data, "Updates", "pending.txt");
-            if (!File.Exists(marker)) return;
-            var file = File.ReadAllText(marker).Trim();
-            File.Delete(marker);
-            if (File.Exists(file)) Process.Start(new ProcessStartInfo(file, "/S /norun") { UseShellExecute = false });
-        }
-        catch { }
     }
 }

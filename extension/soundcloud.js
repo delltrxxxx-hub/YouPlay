@@ -24,6 +24,7 @@ function scBigArt(a) { return a ? a.replace(/-(large|t\d+x\d+|small|badge|tiny|m
 
 // ───────── playback ─────────
 function scLoad(item) {
+  try { if (isDisliked('sc', item.url)) { SC.current = item; SC.active = true; setTimeout(scFinished, 30); return; } } catch {}
   SC.current = item; SC.active = true; SC.ready = false; SC.pos = 0; SC.dur = (item.duration || 0); SC.paused = true;
   document.documentElement.classList.add('yp-sc-active');
   if (video && !video.paused) video.pause();
@@ -34,6 +35,7 @@ function scLoad(item) {
   SC.frame.src = scWidgetUrl(item.url, true);
   scShowTrack();
   renderQueue();
+  try { syncLikeState(); } catch {}
 }
 function scPlayNext() {
   const next = SC.queue.shift();

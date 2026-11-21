@@ -33,9 +33,22 @@ UninstPage instfiles
 
 Section "Install"
   SetDetailsPrint none
-  ; close a running launcher / the old Electron build of YouPlay (Edge itself keeps playing)
-  nsExec::Exec 'taskkill /F /IM YouPlay.exe'
-  Sleep 800
+  ; ask a running YouPlay to close (so the sign-in session is saved), wait for it, force only as a last resort
+  nsExec::Exec 'taskkill /IM YouPlay.exe'
+  StrCpy $R8 0
+  waitloop:
+    nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq YouPlay.exe" /NH | find /I "YouPlay.exe"'
+    Pop $R7
+    StrCmp $R7 "0" 0 closed
+    IntOp $R8 $R8 + 1
+    IntCmp $R8 30 forcekill 0 forcekill
+    Sleep 500
+    Goto waitloop
+  forcekill:
+    nsExec::Exec 'taskkill /F /IM YouPlay.exe'
+    Sleep 1500
+  closed:
+  Sleep 1500
   ; replace the previous version completely
   RMDir /r "$INSTDIR"
   SetOutPath "$INSTDIR"

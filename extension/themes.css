@@ -684,7 +684,7 @@ html[data-yp-theme="aero"] ytmusic-search-box input::placeholder { color: #6d6d6
 .yp-ly-art { cursor: pointer; }
 .yp-ly-src { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .yp-offset { display: inline-flex; align-items: center; gap: 4px; opacity: 1; }
-.yp-offset button, .yp-offset b { font: 600 11px/1 inherit; color: var(--yp-muted) !important; padding: 5px 8px !important; border-radius: 999px !important; background: var(--yp-surface-2) !important; cursor: pointer; }
+.yp-offset button, .yp-offset b { font: 600 11px/1 sans-serif; font-family: inherit; color: var(--yp-muted) !important; padding: 5px 8px !important; border-radius: 999px !important; background: var(--yp-surface-2) !important; cursor: pointer; }
 .yp-offset b { color: var(--yp-text) !important; min-width: 52px; text-align: center; }
 .yp-offset button:hover { color: var(--yp-text) !important; }
 

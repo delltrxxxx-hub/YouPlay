@@ -14,11 +14,11 @@ html[data-yp-theme="studio"] #yp-hub { bottom: calc(var(--ytmusic-player-bar-hei
 .yp-h-head small { display: block; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--yp-accent); }
 .yp-h-head h1 { margin: 4px 0 0; font: 900 clamp(28px, 3.4vw, 46px)/1.05 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: -.03em; }
 .yp-h-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: var(--yp-surface-2); }
-.yp-h-tab { border: 0; background: none; color: var(--yp-muted); font: 700 13px/1 inherit; padding: 9px 14px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; transition: background-color .2s, color .2s; }
+.yp-h-tab { border: 0; background: none; color: var(--yp-muted); font: 700 13px/1 sans-serif; font-family: inherit; padding: 9px 14px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; transition: background-color .2s, color .2s; }
 .yp-h-tab i { font-style: normal; font-weight: 600; opacity: .7; font-size: 12px; }
 .yp-h-tab:hover { color: var(--yp-text); }
 .yp-h-tab.on { background: var(--yp-text); color: var(--st-bg, #111); }
-.yp-h-link { margin-left: auto; border: 0; background: none; color: var(--yp-muted); font: 600 13px/1 inherit; cursor: pointer; padding: 8px 0; }
+.yp-h-link { margin-left: auto; border: 0; background: none; color: var(--yp-muted); font: 600 13px/1 sans-serif; font-family: inherit; cursor: pointer; padding: 8px 0; }
 .yp-h-link:hover { color: var(--yp-text); }
 
 .yp-h-list { display: flex; flex-direction: column; gap: 2px; }
@@ -53,7 +53,7 @@ html[data-yp-theme="studio"] #yp-hub { bottom: calc(var(--ytmusic-player-bar-hei
 .yp-h-ttl p { margin: 10px 0 0; color: var(--yp-muted); font-size: 13px; white-space: pre; }
 .yp-h-btns { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
 .yp-h-btns .yp-btn { height: 44px; padding: 0 22px; font-size: 14px !important; }
-.yp-h-ghost { height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--yp-border); background: var(--yp-surface-2); color: var(--yp-text); display: inline-flex; align-items: center; gap: 8px; font: 700 13px/1 inherit; cursor: pointer; transition: transform .25s var(--yp-spring), background-color .2s; }
+.yp-h-ghost { height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--yp-border); background: var(--yp-surface-2); color: var(--yp-text); display: inline-flex; align-items: center; gap: 8px; font: 700 13px/1 sans-serif; font-family: inherit; cursor: pointer; transition: transform .25s var(--yp-spring), background-color .2s; }
 .yp-h-ghost:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--yp-text) 12%, transparent); }
 .yp-h-banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 18px; border-radius: 14px; background: rgba(255, 122, 26, .1); border: 1px solid rgba(255, 122, 26, .3); }
 .yp-h-banner div { flex: 1; display: flex; flex-direction: column; gap: 2px; }

@@ -20,7 +20,7 @@
 /* add-by-link field */
 .yp-sc-add { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; margin-bottom: 14px; border-radius: 14px; background: var(--yp-surface-2); border: 1px solid transparent; transition: border-color .2s, box-shadow .2s; }
 .yp-sc-add:focus-within { border-color: rgba(255, 122, 26, .6); box-shadow: 0 0 0 4px rgba(255, 122, 26, .15); }
-.yp-sc-add input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--yp-text); font: 500 14px/1.2 inherit; font-family: inherit; }
+.yp-sc-add input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--yp-text); font: 500 14px/1.2 sans-serif; font-family: inherit; font-family: inherit; }
 .yp-sc-add input::placeholder { color: var(--yp-muted); }
 .yp-sc-add .yp-btn { height: 34px; }
 

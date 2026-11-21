@@ -25,6 +25,7 @@ window.addEventListener('message', (e) => {
   if (e.source !== window || !e.data) return;
   if (e.data.ypYtNow) { curVideoId = e.data.ypYtNow; hubOnYtTrack(); }
   if (e.data.ypScData && scJobs.has(e.data.ypScData.id)) { const r = scJobs.get(e.data.ypScData.id); scJobs.delete(e.data.ypScData.id); r(e.data.ypScData); }
+  if (e.data.ypScLogout) { HUB.likes.scLogin = false; HUB.likes.sc = []; if (HUB.view === 'likes') render(); }
   if (typeof e.data.ypScLogin === 'boolean') { if (e.data.ypScLogin) { toast(h('div', { class: 'yp-tt' }, h('span', { class: 'yp-badge sc', text: 'SoundCloud' }), h('span', { text: 'Подключено! Загружаю ваши лайки…' })), { timeout: 3000 }); loadScLikes(true); } }
 });
 
@@ -34,7 +35,7 @@ const store = {
   set: (k, v) => chrome.storage.local.set({ [k]: v }),
 };
 let ytLikeDates = {};
-store.get('ytLikeDates').then((v) => { ytLikeDates = v || {}; });
+ready.then(() => store.get('ytLikeDates')).then((v) => { ytLikeDates = v || {}; });
 
 // ───────── shell ─────────
 function hubEl() {
@@ -111,13 +112,14 @@ function scrapeYtSearch() {
     out.push({ src: 'yt', videoId: v, title, artist, art: src, durText: dur, kind });
   }
   out.sort((a, b) => (a.kind === 'video') - (b.kind === 'video'));
+  try { return out.filter((x) => !isDisliked('yt', x.videoId)).slice(0, 30); } catch {}
   return out.slice(0, 30);
 }
 async function searchSoundCloud(q) {
   HUB.scState = 'loading'; HUB.sc = []; render();
   const r = await scJob('search', q);
   if (HUB.q !== q) return;
-  HUB.sc = (r.items || []).map((t) => ({ ...t, src: 'sc' }));
+  HUB.sc = (r.items || []).map((t) => ({ ...t, src: 'sc' })).filter((t) => { try { return !isDisliked('sc', t.url); } catch { return true; } });
   HUB.scState = r.error ? 'error' : 'done';
   render();
 }
@@ -171,7 +173,7 @@ async function loadYtLikes(force) {
   let n = -1, stable = 0;
   for (let i = 0; i < 120 && stable < 4; i++) {
     await new Promise((r) => setTimeout(r, i < 6 ? 500 : 700));
-    if (!/list=LM|VLLM/.test(location.href) && i > 8) break;
+    if ((!/list=LM|VLLM/.test(location.href) && i > 8) || !HUB.likes.loadingYt) break;
     const c = rows().length;
     if (c === n && c > 0) stable++; else stable = 0;
     n = c;
@@ -224,7 +226,7 @@ function mergedLikes() {
     else if (k2 < n) yt[i].t = yt[k2].t + (k2 - i) * (top - bottom) / Math.max(n, 1);
     else yt[i].t = top - (n > 1 ? i / (n - 1) : 0) * (top - bottom);
   }
-  return [...yt, ...sc].sort((a, b) => b.t - a.t);
+  return [...yt, ...sc].sort((a, b) => b.t - a.t).filter((x) => { try { return !isDisliked(x.src, x.src === 'sc' ? x.url : x.videoId); } catch { return true; } });
 }
 async function likeSc(it, btn) {
   if (btn) btn.classList.add('busy');
@@ -303,6 +305,14 @@ function hubWatchEnd() {
   if (video.duration - video.currentTime < 0.45 && video.currentTime > 1) { video.pause(); listNext(); }
 }
 function hubOnYtTrack() {
+  try {
+    if (!scOn() && isDisliked('yt', curVideoId)) {
+      toast(h('div', { class: 'yp-tt' }, icon(I.broken, 18), h('span', { text: 'Пропускаю трек из «Не нравится»' })), { id: 'skipdis', timeout: 1800 });
+      if (HUB.list) listNext(); else clickBar('.next-button');
+      return;
+    }
+    syncLikeState();
+  } catch {}
   const L = HUB.list;
   if (L && !scOn()) {
     const it = L.items[L.i];
@@ -330,12 +340,24 @@ document.addEventListener('click', (e) => {
 
 // ───────── routing ─────────
 function render() { if (HUB.view === 'search') renderSearch(); else if (HUB.view === 'likes') renderLikes(); if (HUB.el) HUB.el.style.setProperty('--yp-hub-left', guideWidth() + 'px'); }
+let lastRoute = '';
 function hubTick() {
   if (!ui.root) return;
+  const route = location.pathname + location.search;
+  if (route !== lastRoute) {
+    lastRoute = route;
+    const keep = location.pathname === '/search' || (location.pathname === '/playlist' && /[?&]list=LM\b/.test(location.search)) || (HUB.view === 'likes' && HUB.likes.loadingYt && /VLLM|list=LM/.test(route));
+    if (HUB.view && !keep) hubHide();
+  }
   searchTick();
   const onLM = location.pathname === '/playlist' && new URLSearchParams(location.search).get('list') === 'LM';
   if (onLM && HUB.view !== 'likes' && !HUB.likes.loadingYt) openLikes();
   if (HUB.el && HUB.view) HUB.el.style.setProperty('--yp-hub-left', guideWidth() + 'px');
 }
-setInterval(hubTick, 600);
+setInterval(hubTick, 400);
+// clicking the side menu, logo or a YouTube Music link always shows that page
+document.addEventListener('click', (e) => {
+  if (!HUB.view) return;
+  if (e.target.closest && e.target.closest('ytmusic-guide-entry-renderer, ytmusic-nav-bar ytmusic-logo, ytmusic-nav-bar #guide-button')) { HUB.likes.loadingYt = false; hubHide(); }
+}, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && HUB.view && !document.querySelector('#yp-modal-wrap') && !(ui.lyrics && ui.lyrics.classList.contains('full'))) { if (HUB.view === 'search') HUB.hideFor = HUB.q; hubHide(); } });
