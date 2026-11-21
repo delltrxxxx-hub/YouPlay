@@ -1,0 +1,58 @@
+/* YouPlay — SoundCloud in the shared queue */
+
+/* the official widget plays invisibly; YouPlay draws the UI */
+#yp-sc-frame, .yp-sc-probe { position: fixed; left: -4px; bottom: -4px; width: 2px; height: 2px; opacity: 0; pointer-events: none; border: 0; z-index: -1; }
+
+/* source badges */
+.yp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .02em; line-height: 16px; vertical-align: 1px; white-space: nowrap; }
+.yp-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.yp-badge.yt { color: #ff4e45; background: rgba(255, 78, 69, .14); }
+.yp-badge.sc { color: #ff7a1a; background: rgba(255, 122, 26, .16); }
+.yp-ly-meta .yp-badge { margin-top: 6px; }
+#yp-lyrics:not(.full) .yp-ly-meta .yp-badge { display: none; }
+
+/* cloud glyph */
+.yp-cloud { display: inline-block; width: 16px; height: 16px; background: #ff7a1a; vertical-align: middle;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19.4 10.2A6.5 6.5 0 0 0 7.1 8.6 4.8 4.8 0 0 0 7.5 18.2h11.4a4 4 0 0 0 .5-8z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19.4 10.2A6.5 6.5 0 0 0 7.1 8.6 4.8 4.8 0 0 0 7.5 18.2h11.4a4 4 0 0 0 .5-8z'/%3E%3C/svg%3E") center / contain no-repeat; }
+.yp-cloud.big { width: 22px; height: 22px; flex: none; }
+
+/* add-by-link field */
+.yp-sc-add { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; margin-bottom: 14px; border-radius: 14px; background: var(--yp-surface-2); border: 1px solid transparent; transition: border-color .2s, box-shadow .2s; }
+.yp-sc-add:focus-within { border-color: rgba(255, 122, 26, .6); box-shadow: 0 0 0 4px rgba(255, 122, 26, .15); }
+.yp-sc-add input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--yp-text); font: 500 14px/1.2 inherit; font-family: inherit; }
+.yp-sc-add input::placeholder { color: var(--yp-muted); }
+.yp-sc-add .yp-btn { height: 34px; }
+
+/* SoundCloud rows */
+.yp-q-sc { cursor: pointer; }
+.yp-q-sc.on { background: rgba(255, 122, 26, .16) !important; }
+.yp-q-sc.on .yp-q-meta b { color: #ff7a1a; }
+.yp-q-sc .yp-eq b { background: #ff7a1a; }
+.yp-q-meta small .yp-badge { margin-right: 2px; }
+.yp-q-x { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: var(--yp-muted); font-size: 18px; opacity: 0; transition: opacity .15s, background-color .15s; }
+.yp-q-item:hover .yp-q-x { opacity: 1; }
+.yp-q-x:hover { background: var(--yp-surface-2); color: var(--yp-text); }
+
+/* player bar while SoundCloud plays */
+#yp-scbar { display: none; }
+html.yp-sc-active #yp-scbar {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px;
+  position: fixed; left: 0; right: 0; bottom: 0; height: var(--ytmusic-player-bar-height, 72px); padding: 0 18px; z-index: 6;
+  background: var(--yp-menu-bg, rgba(18,14,26,.96)); border-top: 1px solid rgba(255, 122, 26, .35);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+}
+html[data-yp-theme="studio"].yp-sc-active #yp-scbar { left: 10px; right: 10px; bottom: 8px; height: calc(var(--ytmusic-player-bar-height, 72px) - 6px); border-radius: 14px; border: 1px solid rgba(255, 122, 26, .3); }
+.yp-scb-l { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; }
+.yp-scb-l img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; flex: none; }
+.yp-scb-l div { min-width: 0; display: flex; flex-direction: column; }
+.yp-scb-l b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yp-scb-l small { font-size: 12px; color: var(--yp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yp-scb-c { display: flex; align-items: center; gap: 14px; }
+.yp-scb-c .yp-ic { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+.yp-scb-c .yp-ic::after { display: none; }
+.yp-scb-c .yp-np-play { width: 46px; height: 46px; border-radius: 50%; background: var(--yp-text) !important; color: #111 !important; }
+.yp-scb-r { justify-self: end; }
+.yp-scb-r .yp-btn { height: 32px; font-size: 12px !important; }
+
+.yp-q-item { box-sizing: border-box; }

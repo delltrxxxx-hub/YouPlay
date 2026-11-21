@@ -59,6 +59,7 @@ const I = {
   shuffle: 'M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
   repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
   queue: 'M4 6h12v2H4zm0 5h12v2H4zm0 5h8v2H4zm12 0v-5l5 3.5z',
+  cloud: 'M19.4 10.2A6.5 6.5 0 0 0 7.1 8.6 4.8 4.8 0 0 0 7.5 18.2h11.4a4 4 0 0 0 .5-8z',
   update: 'M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1a6.88 6.88 0 0 0 0 9.8 7.02 7.02 0 0 0 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58a8.987 8.987 0 0 1 12.65 0L21 3v7.12z',
 };
 const clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
@@ -110,6 +111,7 @@ function buildUI() {
   ui.fab = h('div', { id: 'yp-fab' },
     ui.btnLyrics = h('button', { class: 'yp-ic', title: 'Текст песни (Ctrl+L)', onclick: () => toggleLyrics() }, icon(I.lyrics)),
     ui.btnSubs = h('button', { class: 'yp-ic', title: 'Субтитры (Ctrl+J)', onclick: () => toggleSubs() }, icon(I.sub)),
+    ui.btnSc = h('button', { class: 'yp-ic', title: 'Добавить из SoundCloud (или просто вставьте ссылку Ctrl+V)', onclick: () => { openNowPlaying(); toggleQueue(true); setTimeout(() => ui.scInput.focus(), 350); } }, icon(I.cloud)),
     ui.btnNow = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран (Ctrl+K)', onclick: () => openNowPlaying() }, icon(I.expand)),
     ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'YouPlay — оформление и настройки', onclick: () => openSettings() }, icon(I.spark)));
   ui.btnSubs.classList.toggle('on', !!S.subtitles);
@@ -120,7 +122,7 @@ function buildUI() {
     h('div', { class: 'yp-ly-bg' }, ui.lyBgArt = h('div', { class: 'yp-ly-bgart' })),
     h('header', { class: 'yp-ly-head' },
       ui.lyArt = h('img', { class: 'yp-ly-art', alt: '', title: 'Сейчас играет', onclick: () => openNowPlaying() }),
-      h('div', { class: 'yp-ly-meta' }, ui.lyTitle = h('div', { class: 'yp-ly-title' }), ui.lyArtist = h('div', { class: 'yp-ly-artist' })),
+      h('div', { class: 'yp-ly-meta' }, ui.lyTitle = h('div', { class: 'yp-ly-title' }), ui.lyArtist = h('div', { class: 'yp-ly-artist' }), ui.npSrc = h('span', { class: 'yp-badge yt', text: 'YouTube Music' })),
       h('div', { class: 'yp-ly-tools' },
         ui.lyFull = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран', onclick: () => setFull(!ui.lyrics.classList.contains('full')) }, icon(I.expand)),
         h('button', { class: 'yp-ic', title: 'Закрыть (Esc)', onclick: () => toggleLyrics(false) }, icon(I.close))),
@@ -129,13 +131,20 @@ function buildUI() {
         h('div', { class: 'yp-np-times' }, ui.npCur = h('span', { text: '0:00' }), ui.npDur = h('span', { text: '0:00' })),
         h('div', { class: 'yp-np-btns' },
           h('button', { class: 'yp-ic', title: 'Перемешать', onclick: () => clickBar('.shuffle') }, icon(I.shuffle, 20)),
-          h('button', { class: 'yp-ic', title: 'Назад', onclick: () => clickBar('.previous-button') }, icon(I.prev, 24)),
-          ui.npPlay = h('button', { class: 'yp-ic yp-np-play', title: 'Играть / пауза', onclick: () => clickBar('#play-pause-button') }, icon(I.pause, 30)),
+          h('button', { class: 'yp-ic', title: 'Назад', onclick: () => { if (scOn()) scSeek(0); else clickBar('.previous-button'); } }, icon(I.prev, 24)),
+          ui.npPlay = h('button', { class: 'yp-ic yp-np-play', title: 'Играть / пауза', onclick: () => { if (scOn()) scPost('toggle'); else clickBar('#play-pause-button'); } }, icon(I.pause, 30)),
           h('button', { class: 'yp-ic', title: 'Далее', onclick: () => clickBar('.next-button') }, icon(I.next, 24)),
           h('button', { class: 'yp-ic', title: 'Повтор', onclick: () => clickBar('.repeat') }, icon(I.repeat, 20)),
           ui.btnQueue = h('button', { class: 'yp-ic', title: 'Очередь', onclick: () => toggleQueue() }, icon(I.queue, 20))))),
     ui.lyScroll = h('div', { class: 'yp-ly-scroll' }, ui.lyList = h('div', { class: 'yp-ly-list' })),
-    ui.queue = h('div', { class: 'yp-queue' }, h('div', { class: 'yp-q-head' }, h('b', { text: 'Очередь' }), ui.qCount = h('span')), ui.qList = h('div', { class: 'yp-q-list' })),
+    ui.queue = h('div', { class: 'yp-queue' },
+      h('div', { class: 'yp-q-head' }, h('b', { text: 'Очередь' }), ui.qCount = h('span')),
+      h('div', { class: 'yp-sc-add' },
+        h('span', { class: 'yp-cloud big' }),
+        ui.scInput = h('input', { type: 'url', placeholder: 'Ссылка SoundCloud на трек или плейлист — Enter', spellcheck: 'false',
+          onkeydown: (e) => { if (e.key === 'Enter' && ui.scInput.value.trim()) { scAdd(ui.scInput.value); ui.scInput.value = ''; } } }),
+        h('button', { class: 'yp-btn', text: 'Добавить', onclick: () => { if (ui.scInput.value.trim()) { scAdd(ui.scInput.value); ui.scInput.value = ''; } } })),
+      ui.qList = h('div', { class: 'yp-q-list' })),
     h('div', { class: 'yp-ly-src' },
       h('span', { text: 'Тексты: LRCLIB' }),
       h('span', { class: 'yp-offset' },
@@ -150,10 +159,18 @@ function buildUI() {
     }
   }, { passive: true });
 
+  ui.scBar = h('div', { id: 'yp-scbar' },
+    h('div', { class: 'yp-scb-l', onclick: () => openNowPlaying() }, ui.scbArt = h('img', { alt: '' }),
+      h('div', {}, ui.scbTitle = h('b'), h('small', {}, h('span', { class: 'yp-badge sc', text: 'SoundCloud' }), ui.scbArtist = h('span')))),
+    h('div', { class: 'yp-scb-c' },
+      h('button', { class: 'yp-ic', title: 'В начало', onclick: () => scSeek(0) }, icon(I.prev, 22)),
+      ui.scbPlay = h('button', { class: 'yp-ic yp-np-play', title: 'Играть / пауза', onclick: () => scPost('toggle') }, icon(I.pause, 26)),
+      h('button', { class: 'yp-ic', title: 'Далее', onclick: () => scFinished() }, icon(I.next, 22))),
+    h('div', { class: 'yp-scb-r' }, h('button', { class: 'yp-btn', text: 'Вернуться к YouTube Music', onclick: () => scStop('play') })));
   ui.toasts = h('div', { id: 'yp-toasts' });
   ui.np = h('div', { id: 'yp-np' });
 
-  ui.root = h('div', { id: 'yp-root' }, ui.canvas, ui.subs, ui.lyrics, ui.fab, ui.np, ui.toasts);
+  ui.root = h('div', { id: 'yp-root' }, ui.canvas, ui.subs, ui.lyrics, ui.scBar, ui.fab, ui.np, ui.toasts);
   document.body.prepend(backdrop);
   document.body.append(ui.root);
   ui.backdrop = backdrop;
@@ -164,9 +181,9 @@ function buildUI() {
 function clickBar(sel) { const b = $('ytmusic-player-bar ' + sel); if (b) (b.querySelector('button') || b).click(); }
 const fmt = (t) => { t = Math.max(0, t | 0); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 function seekStart(e) {
-  const bar = e.currentTarget; if (!video || !isFinite(video.duration)) return;
+  const bar = e.currentTarget; if (!curDur()) return;
   bar.setPointerCapture(e.pointerId);
-  const go = (ev) => { const r = bar.getBoundingClientRect(); video.currentTime = clamp((ev.clientX - r.left) / r.width) * video.duration; lastLine = -2; paintProgress(); };
+  const go = (ev) => { const r = bar.getBoundingClientRect(); seekTo(clamp((ev.clientX - r.left) / r.width) * curDur()); lastLine = -2; paintProgress(); };
   go(e);
   bar.onpointermove = go;
   bar.onpointerup = () => { bar.onpointermove = null; bar.onpointerup = null; };
@@ -182,23 +199,31 @@ function ytQueueItems() {
 function renderQueue() {
   if (!queueOpen) return;
   const items = ytQueueItems();
-  ui.qCount.textContent = items.length ? items.length + ' треков' : '';
-  if (!items.length) { ui.qList.replaceChildren(h('div', { class: 'yp-ly-msg' }, h('span', { text: 'Очередь пуста' }))); return; }
+  let sc = []; try { sc = scRows(); } catch {}
+  const total = items.length + sc.length;
+  ui.qCount.textContent = total ? total + ' треков' : '';
+  if (!total) { ui.qList.replaceChildren(h('div', { class: 'yp-ly-msg' }, h('span', { text: 'Очередь пуста. Вставьте ссылку SoundCloud выше или включите что-нибудь в YouTube Music.' }))); return; }
   let cur = null;
-  ui.qList.replaceChildren(...items.slice(0, 200).map((it, i) => {
+  const ytRows = items.slice(0, 200).map((it, i) => {
     const t = (it.querySelector('.song-title') || {}).textContent || '';
     const b = (it.querySelector('.byline') || {}).textContent || '';
     const img = it.querySelector('.thumbnail img, img');
     const d = (it.querySelector('.duration') || {}).textContent || '';
-    const on = it.hasAttribute('selected');
-    const row = h('button', { class: 'yp-q-item' + (on ? ' on' : ''), title: t, onclick: () => { const p = it.querySelector('ytmusic-play-button-renderer, .song-info, .left-items') || it; p.click(); setTimeout(renderQueue, 700); } },
+    const sel = it.hasAttribute('selected');
+    const on = sel && !scOn();
+    const row = h('button', { class: 'yp-q-item' + (on ? ' on' : '') + (sel ? ' cur' : ''), title: t, onclick: () => { if (scOn()) scStop(); const p = it.querySelector('ytmusic-play-button-renderer, .song-info, .left-items') || it; p.click(); setTimeout(renderQueue, 700); } },
       h('span', { class: 'yp-q-n', text: on ? '' : String(i + 1) }, on ? h('i', { class: 'yp-eq' }, h('b'), h('b'), h('b')) : null),
       h('img', { src: img ? img.src : '', alt: '', loading: 'lazy' }),
-      h('span', { class: 'yp-q-meta' }, h('b', { text: t.trim() }), h('small', { text: b.trim() })),
+      h('span', { class: 'yp-q-meta' }, h('b', { text: t.trim() }), h('small', {}, h('span', { class: 'yp-badge yt', text: 'YouTube Music' }), ' ' + b.trim())),
       h('span', { class: 'yp-q-d', text: d.trim() }));
     if (on) cur = row;
     return row;
-  }));
+  });
+  const at = ytRows.findIndex((r) => r.classList.contains('cur'));
+  const rows = ytRows.slice();
+  rows.splice(at >= 0 ? at + 1 : 0, 0, ...sc);
+  if (!cur && sc.length && scOn()) cur = sc[0];
+  ui.qList.replaceChildren(...rows);
   if (cur) requestAnimationFrame(() => cur.scrollIntoView({ block: 'center' }));
 }
 function toggleQueue(force) {
@@ -210,18 +235,30 @@ function toggleQueue(force) {
 
 function syncPlayIcon() {
   if (ui.npPlay) ui.npPlay.replaceChildren(icon(playing ? I.pause : I.play, 30));
+  if (ui.scbPlay) ui.scbPlay.replaceChildren(icon(playing ? I.pause : I.play, 26));
+  if (scOn() && SC.current && ui.scbTitle) { ui.scbTitle.textContent = SC.current.title || 'SoundCloud'; ui.scbArtist.textContent = ' ' + (SC.current.artist || ''); ui.scbArt.src = SC.current.art || ''; }
   document.documentElement.dataset.ypPlaying = playing ? '1' : '0';
+}
+
+// ── current source: YouTube Music <video> or the SoundCloud widget ──
+function scOn() { try { return SC.active; } catch { return false; } }
+const curTime = () => scOn() ? SC.pos : (video ? video.currentTime : 0);
+const curDur = () => scOn() ? SC.dur : (video && isFinite(video.duration) ? video.duration : 0);
+function seekTo(t) { if (scOn()) scSeek(t); else if (video) video.currentTime = t; }
+function setSrcBadge(src) {
+  if (!ui.npSrc) return;
+  ui.npSrc.className = 'yp-badge ' + src;
+  ui.npSrc.textContent = src === 'sc' ? 'SoundCloud' : 'YouTube Music';
 }
 
 // smooth progress: we drive YT Music's bar and our own every animation frame
 let ytProg = null, ytKnob = null, ytSlider = null;
 function paintProgress() {
-  if (!video) return;
-  const d = video.duration, t = video.currentTime;
+  const d = curDur(), t = curTime();
   if (!isFinite(d) || d <= 0) return;
   const p = clamp(t / d);
   if (!ytSlider || !ytSlider.isConnected) { ytSlider = $('ytmusic-player-bar #progress-bar'); ytProg = ytSlider && ytSlider.querySelector('#primaryProgress'); ytKnob = ytSlider && ytSlider.querySelector('#sliderKnob'); }
-  if (ytProg && !(ytSlider.dragging || ytSlider.hasAttribute('dragging') || ytSlider.classList.contains('dragging'))) {
+  if (!scOn() && ytProg && !(ytSlider.dragging || ytSlider.hasAttribute('dragging') || ytSlider.classList.contains('dragging'))) {
     ytProg.style.transform = 'scaleX(' + p.toFixed(5) + ')';
     if (ytKnob) ytKnob.style.left = (p * 100).toFixed(4) + '%';
   }
@@ -380,6 +417,7 @@ function onTrackChange(tr) {
   ui.lyTitle.textContent = tr.title; ui.lyArtist.textContent = tr.artist;
   const info = $('ytmusic-player-bar .content-info-wrapper');
   if (info) { info.classList.remove('yp-swap'); void info.offsetWidth; info.classList.add('yp-swap'); }
+  setSrcBadge('yt');
   showNowPlaying(tr);
   if (S.autoNowPlaying && performance.now() - lastGesture < 5000 && !(modal)) openNowPlaying();
   setTimeout(renderQueue, 900);
@@ -419,7 +457,7 @@ function extractColors(url) {
 
 function attachVideo(v) {
   if (video === v) return; video = v;
-  v.addEventListener('play', () => { playing = true; syncPlayIcon(); send('yp:playing', true); ensureAudio(); kick(); });
+  v.addEventListener('play', () => { try { scOnVideoPlay(); } catch {} playing = true; syncPlayIcon(); send('yp:playing', true); ensureAudio(); kick(); });
   v.addEventListener('pause', () => { playing = false; syncPlayIcon(); paintProgress(); send('yp:playing', false); });
   v.addEventListener('seeked', () => { lastLine = -2; kick(); });
   v.addEventListener('timeupdate', adCheck);
@@ -480,10 +518,12 @@ let bassAvg = 0.3, bass = 0, raf = 0;
 function kick() { if (!raf) raf = requestAnimationFrame(frame); }
 function frame() {
   raf = 0;
-  const needViz = analyser && S.visualizer !== 'off';
+  const needViz = analyser && S.visualizer !== 'off' && !scOn();
   const needLyrics = lines.length && (S.subtitles || lyricsOpen);
-  if (!video || video.paused || document.hidden) { relax(); return; }
+  const ytPlaying = video && !video.paused;
+  if (document.hidden || !(ytPlaying || (scOn() && !SC.paused))) { relax(); return; }
   paintProgress();
+  if (!scOn()) { try { scWatchEnd(); } catch {} }
   if (needViz) {
     analyser.getByteFrequencyData(freq);
     let s = 0; for (let i = 1; i <= 5; i++) s += freq[i]; // ~20–120 Hz
@@ -558,13 +598,14 @@ const offsets = new Map();
 // Lyrics time for the current playback position. Slowed / sped-up edits are stretched versions of
 // the original recording, so their timestamps are rescaled by the ratio of the two lengths.
 function tempoRatio() {
-  if (!video || !lyMeta.dur || !isFinite(video.duration) || video.duration <= 0) return 1;
-  const k = lyMeta.dur / video.duration;
+  const vd = curDur();
+  if (!lyMeta.dur || !vd) return 1;
+  const k = lyMeta.dur / vd;
   if (k < 0.55 || k > 1.8) return 1;
   if (lyMeta.tempo || Math.abs(k - 1) > 0.04) return k;
   return 1;
 }
-const lyricClock = () => video.currentTime * tempoRatio() + offset;
+const lyricClock = () => curTime() * tempoRatio() + offset;
 const videoTimeFor = (lt) => Math.max(0, (lt - offset) / tempoRatio());
 function nudge(d, reset) {
   offset = reset ? 0 : Math.round((offset + d) * 10) / 10;
@@ -590,10 +631,11 @@ async function loadLyrics(tr) {
   renderSubs(true);
   // the <video> switches to the new track a moment after the metadata does — wait for its real length
   const before = prevDuration;
-  for (let i = 0; i < 20 && video && (!isFinite(video.duration) || (video.duration === before && video.currentTime > 3)); i++) await new Promise((r) => setTimeout(r, 150));
+  if (tr.sc) { for (let i = 0; i < 20 && !curDur(); i++) await new Promise((r) => setTimeout(r, 150)); }
+  else for (let i = 0; i < 20 && video && (!isFinite(video.duration) || (video.duration === before && video.currentTime > 3)); i++) await new Promise((r) => setTimeout(r, 150));
   if (my !== lyricsReq) return;
-  const dur = video && isFinite(video.duration) ? video.duration : 0;
-  prevDuration = dur;
+  const dur = tr.sc ? curDur() : (video && isFinite(video.duration) ? video.duration : 0);
+  if (!tr.sc) prevDuration = dur;
   let r = null;
   try { r = await ipcRenderer.invoke('yp:lyrics', { title: tr.title, artist: tr.artist, album: tr.album, duration: dur }); } catch {}
   if (my !== lyricsReq) return;
@@ -619,7 +661,7 @@ function renderLyricsList(r) {
   ui.lyrics.classList.remove('free');
   if (lines.length) {
     ui.lyList.replaceChildren(...lines.map((l, i) => {
-      const el = h('p', { class: 'yp-line' + (l.text ? '' : ' gap'), onclick: () => { if (video) { video.currentTime = videoTimeFor(l.t) + 0.01; ui.lyrics.classList.remove('free'); lastLine = -2; } } }, ...(l.text ? wordSpans(l.text) : [h('span', { class: 'yp-note', text: '♪ ♪ ♪' })]));
+      const el = h('p', { class: 'yp-line' + (l.text ? '' : ' gap'), onclick: () => { if (curDur()) { seekTo(videoTimeFor(l.t) + 0.01); ui.lyrics.classList.remove('free'); lastLine = -2; } } }, ...(l.text ? wordSpans(l.text) : [h('span', { class: 'yp-note', text: '♪ ♪ ♪' })]));
       el.style.setProperty('--d', '0'); l.el = el; l.idx = i; return el;
     }));
   } else if (plain) {
@@ -718,7 +760,7 @@ function ripple(e) {
 // ═════════════════════════ 13. Watchdog loop (cheap, 2–4 Hz) ═════════════════════════
 function watchdog() {
   const v = $('video'); if (v) attachVideo(v);
-  const tr = readTrack(); if (tr && tr.key !== track.key) onTrackChange(tr);
+  const tr = readTrack(); if (tr && tr.key !== track.key && !scOn()) onTrackChange(tr);
   adCheck();
   const there = $('ytmusic-you-there-renderer button, ytmusic-you-there-renderer yt-button-renderer');
   if (there) there.click();

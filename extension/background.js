@@ -79,6 +79,10 @@ async function findLyrics({ title, artist, album, duration }) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg.type === 'lyrics') { findLyrics(msg).then(reply, () => reply(null)); return true; }
+  if (msg.type === 'sc-oembed') {
+    fetch('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(msg.url)).then((r) => (r.ok ? r.json() : null)).then(reply, () => reply(null));
+    return true;
+  }
   if (msg.type === 'check-update') { checkUpdate().then(reply); return true; }
   if (msg.type === 'update-status') { chrome.storage.session.get('update').then((s) => reply(s.update || null)); return true; }
   if (msg.type === 'adblock') { chrome.storage.local.set({ adblock: msg.on }).then(syncAdRules); return false; }
