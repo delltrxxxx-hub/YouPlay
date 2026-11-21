@@ -1,32 +1,27 @@
 'use strict';
-/* YouPlay preload — runs in an isolated world on music.youtube.com.
-   Everything here touches the DOM via safe APIs only (no innerHTML: YT Music enforces Trusted Types). */
-const { ipcRenderer, contextBridge, webFrame } = require('electron');
+/* YouPlay content script — isolated world on music.youtube.com (Microsoft Edge).
+   DOM is touched via safe APIs only (no innerHTML: YT Music enforces Trusted Types). */
 
-// ═════════════════════════ 1. Ad removal in the page's main world ═════════════════════════
-function mainWorldAdShield() {
-  if (window.__ypShield) return; window.__ypShield = true;
-  const KEYS = ['adPlacements', 'adSlots', 'playerAds', 'adBreakHeartbeatParams'];
-  const prune = (o) => {
-    if (!o || typeof o !== 'object') return o;
-    for (const k of KEYS) if (k in o) delete o[k];
-    if (o.playerResponse && typeof o.playerResponse === 'object') prune(o.playerResponse);
-    if (Array.isArray(o)) for (const x of o) if (x && x.playerResponse) prune(x.playerResponse);
-    return o;
-  };
-  const jp = JSON.parse;
-  JSON.parse = function () { const r = jp.apply(this, arguments); return (r && typeof r === 'object' && (r.adPlacements || r.playerAds || r.adSlots || r.playerResponse)) ? prune(r) : r; };
-  const rj = Response.prototype.json;
-  Response.prototype.json = function () { return rj.call(this).then(prune); };
-  let ipr;
-  try {
-    Object.defineProperty(window, 'ytInitialPlayerResponse', { configurable: true, get: () => ipr, set: (v) => { ipr = prune(v); } });
-  } catch {}
-}
-try {
-  if (contextBridge.executeInMainWorld) contextBridge.executeInMainWorld({ func: mainWorldAdShield });
-  else webFrame.executeJavaScript('(' + mainWorldAdShield.toString() + ')()');
-} catch { try { webFrame.executeJavaScript('(' + mainWorldAdShield.toString() + ')()'); } catch {} }
+// ═════════════════════════ 1. Bridge to the extension background ═════════════════════════
+const DEFAULT_SETTINGS = { theme: 'studio', accent: '#ff5a36', visualizer: 'bars', subtitles: true, nowPlayingToast: true, adblock: true, hideSide: false };
+const _listeners = {};
+const ipcRenderer = {
+  invoke(ch, arg) {
+    if (ch === 'yp:get-settings') return chrome.storage.local.get(null).then((s) => ({ ...DEFAULT_SETTINGS, ...s, version: chrome.runtime.getManifest().version }));
+    if (ch === 'yp:set-settings') {
+      const reload = 'adblock' in arg && (localStorage.getItem('yp-adblock') !== '0') !== !!arg.adblock;
+      if ('adblock' in arg) { localStorage.setItem('yp-adblock', arg.adblock ? '1' : '0'); chrome.runtime.sendMessage({ type: 'adblock', on: !!arg.adblock }); }
+      return chrome.storage.local.set(arg).then(() => { if (reload) location.reload(); });
+    }
+    if (ch === 'yp:lyrics') return chrome.runtime.sendMessage({ type: 'lyrics', ...arg });
+    return Promise.resolve(null);
+  },
+  send(ch) {
+    if (ch === 'yp:check-update') chrome.runtime.sendMessage({ type: 'check-update' }).then((u) => u && ipcRenderer.emit('yp:update', null, u));
+  },
+  on(ch, fn) { (_listeners[ch] = _listeners[ch] || []).push(fn); },
+  emit(ch, e, a) { for (const f of _listeners[ch] || []) f(e, a); },
+};
 
 // ═════════════════════════ 2. Helpers ═════════════════════════
 const $ = (s, r = document) => r.querySelector(s);
@@ -57,6 +52,12 @@ const I = {
   expand: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
   shrink: 'M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z',
   sub: 'M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z',
+  play: 'M8 5.14v13.72c0 .79.87 1.27 1.54.84l10.78-6.86a1 1 0 0 0 0-1.69L9.54 4.3A1 1 0 0 0 8 5.14z',
+  pause: 'M7 4h3.5v16H7zM13.5 4H17v16h-3.5z',
+  prev: 'M6 6h2v12H6zm3.5 6 8.5 6V6z',
+  next: 'M16 6h2v12h-2zM6 18l8.5-6L6 6z',
+  shuffle: 'M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
+  repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
   update: 'M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1a6.88 6.88 0 0 0 0 9.8 7.02 7.02 0 0 0 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58a8.987 8.987 0 0 1 12.65 0L21 3v7.12z',
 };
 const clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
@@ -66,6 +67,7 @@ const send = (ch, ...a) => ipcRenderer.send(ch, ...a);
 let S = { theme: 'glass', accent: '#ff3d77', visualizer: 'bars', subtitles: true, nowPlayingToast: true, adblock: true, version: '' };
 const ready = ipcRenderer.invoke('yp:get-settings').then((s) => { S = { ...S, ...s }; applyTheme(); return S; });
 const THEMES = [
+  { id: 'studio', name: 'Studio', desc: 'Тёплый минимализм в цветах обложки', sw: ['#ff5a36', '#3a1d14', '#120c0a'] },
   { id: 'glass', name: 'Liquid Glass', desc: 'Стекло, блики и живой фон', sw: ['#ff3d77', '#8b3dff', '#22d3ee'] },
   { id: 'material', name: 'Material You', desc: 'Мягкие формы и тональные цвета', sw: ['#d0bcff', '#381e72', '#1c1b1f'] },
   { id: 'holo', name: 'Android Holo', desc: 'Android 4.0 — чёрный и неон', sw: ['#33b5e5', '#000000', '#0099cc'] },
@@ -79,10 +81,18 @@ function applyTheme() {
   if (!root) return;
   root.dataset.ypTheme = S.theme;
   root.dataset.ypViz = S.visualizer;
+  root.dataset.ypHideSide = S.hideSide ? '1' : '0';
   root.style.setProperty('--yp-accent', S.accent);
   vizColors = null; // re-read on next frame
 }
-function save(patch) { Object.assign(S, patch); applyTheme(); return ipcRenderer.invoke('yp:set-settings', patch); }
+function save(patch) { Object.assign(S, patch); applyTheme(); if (patch.theme) setTimeout(guideMode, 50); return ipcRenderer.invoke('yp:set-settings', patch); }
+// Studio uses the slim icon-only side menu: collapse YT Music's full guide once.
+function guideMode() {
+  const full = $('#guide-wrapper');
+  const expanded = full && full.getBoundingClientRect().left >= 0 && getComputedStyle(full).visibility !== 'hidden' && full.offsetWidth > 100;
+  const want = S.theme === 'studio' ? 'mini' : null;
+  if (want === 'mini' && expanded) { const b = $('#guide-button button, #guide-button'); if (b) b.click(); }
+}
 
 // ═════════════════════════ 4. UI skeleton ═════════════════════════
 let ui = {};
@@ -106,12 +116,27 @@ function buildUI() {
   ui.lyrics = h('aside', { id: 'yp-lyrics' },
     h('div', { class: 'yp-ly-bg' }, ui.lyBgArt = h('div', { class: 'yp-ly-bgart' })),
     h('header', { class: 'yp-ly-head' },
-      ui.lyArt = h('img', { class: 'yp-ly-art', alt: '' }),
+      ui.lyArt = h('img', { class: 'yp-ly-art', alt: '', title: 'Сейчас играет', onclick: () => openNowPlaying() }),
       h('div', { class: 'yp-ly-meta' }, ui.lyTitle = h('div', { class: 'yp-ly-title' }), ui.lyArtist = h('div', { class: 'yp-ly-artist' })),
-      ui.lyFull = h('button', { class: 'yp-ic', title: 'Во весь экран', onclick: () => ui.lyrics.classList.toggle('full') || 0 }, icon(I.expand)),
-      h('button', { class: 'yp-ic', title: 'Закрыть', onclick: () => toggleLyrics(false) }, icon(I.close))),
+      h('div', { class: 'yp-ly-tools' },
+        ui.lyFull = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран', onclick: () => setFull(!ui.lyrics.classList.contains('full')) }, icon(I.expand)),
+        h('button', { class: 'yp-ic', title: 'Закрыть (Esc)', onclick: () => toggleLyrics(false) }, icon(I.close))),
+      h('div', { class: 'yp-np-ctrl' },
+        h('div', { class: 'yp-np-bar', onpointerdown: seekStart }, ui.npFill = h('i', { class: 'fill' }), ui.npKnob = h('i', { class: 'knob' })),
+        h('div', { class: 'yp-np-times' }, ui.npCur = h('span', { text: '0:00' }), ui.npDur = h('span', { text: '0:00' })),
+        h('div', { class: 'yp-np-btns' },
+          h('button', { class: 'yp-ic', title: 'Перемешать', onclick: () => clickBar('.shuffle') }, icon(I.shuffle, 20)),
+          h('button', { class: 'yp-ic', title: 'Назад', onclick: () => clickBar('.previous-button') }, icon(I.prev, 24)),
+          ui.npPlay = h('button', { class: 'yp-ic yp-np-play', title: 'Играть / пауза', onclick: () => clickBar('#play-pause-button') }, icon(I.pause, 30)),
+          h('button', { class: 'yp-ic', title: 'Далее', onclick: () => clickBar('.next-button') }, icon(I.next, 24)),
+          h('button', { class: 'yp-ic', title: 'Повтор', onclick: () => clickBar('.repeat') }, icon(I.repeat, 20))))),
     ui.lyScroll = h('div', { class: 'yp-ly-scroll' }, ui.lyList = h('div', { class: 'yp-ly-list' })),
-    ui.lySource = h('div', { class: 'yp-ly-src', text: 'Тексты: LRCLIB' }));
+    h('div', { class: 'yp-ly-src' },
+      h('span', { text: 'Тексты: LRCLIB' }),
+      h('span', { class: 'yp-offset' },
+        h('button', { title: 'Текст раньше на 0,5 с', text: '−0,5 с', onclick: () => nudge(-0.5) }),
+        ui.offLabel = h('b', { text: 'синхр.', title: 'Сбросить сдвиг', onclick: () => nudge(0, true) }),
+        h('button', { title: 'Текст позже на 0,5 с', text: '+0,5 с', onclick: () => nudge(0.5) }))));
   ui.lyScroll.addEventListener('wheel', () => {
     userScrolledAt = performance.now();
     if (!ui.lyrics.classList.contains('free') && lines.length) {
@@ -129,6 +154,40 @@ function buildUI() {
   ui.backdrop = backdrop;
   window.addEventListener('resize', sizeCanvas, { passive: true });
   sizeCanvas();
+}
+
+function clickBar(sel) { const b = $('ytmusic-player-bar ' + sel); if (b) (b.querySelector('button') || b).click(); }
+const fmt = (t) => { t = Math.max(0, t | 0); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+function seekStart(e) {
+  const bar = e.currentTarget; if (!video || !isFinite(video.duration)) return;
+  bar.setPointerCapture(e.pointerId);
+  const go = (ev) => { const r = bar.getBoundingClientRect(); video.currentTime = clamp((ev.clientX - r.left) / r.width) * video.duration; lastLine = -2; paintProgress(); };
+  go(e);
+  bar.onpointermove = go;
+  bar.onpointerup = () => { bar.onpointermove = null; bar.onpointerup = null; };
+}
+function setFull(on) { ui.lyrics.classList.toggle('full', on); document.documentElement.classList.toggle('yp-np-open', on); lastLine = -2; paintProgress(); kick(); }
+function openNowPlaying() { if (!lyricsOpen) toggleLyrics(true); setFull(true); }
+function syncPlayIcon() { if (ui.npPlay) ui.npPlay.replaceChildren(icon(playing ? I.pause : I.play, 30)); }
+
+// smooth progress: we drive YT Music's bar and our own every animation frame
+let ytProg = null, ytKnob = null, ytSlider = null;
+function paintProgress() {
+  if (!video) return;
+  const d = video.duration, t = video.currentTime;
+  if (!isFinite(d) || d <= 0) return;
+  const p = clamp(t / d);
+  if (!ytSlider || !ytSlider.isConnected) { ytSlider = $('ytmusic-player-bar #progress-bar'); ytProg = ytSlider && ytSlider.querySelector('#primaryProgress'); ytKnob = ytSlider && ytSlider.querySelector('#sliderKnob'); }
+  if (ytProg && !(ytSlider.dragging || ytSlider.hasAttribute('dragging') || ytSlider.classList.contains('dragging'))) {
+    ytProg.style.transform = 'scaleX(' + p.toFixed(5) + ')';
+    if (ytKnob) ytKnob.style.left = (p * 100).toFixed(4) + '%';
+  }
+  if (lyricsOpen && ui.npFill) {
+    ui.npFill.style.transform = 'scaleX(' + p.toFixed(5) + ')';
+    ui.npKnob.style.left = (p * 100).toFixed(4) + '%';
+    const c = fmt(t); if (ui.npCur.textContent !== c) ui.npCur.textContent = c;
+    const dd = fmt(d); if (ui.npDur.textContent !== dd) ui.npDur.textContent = dd;
+  }
 }
 
 // ═════════════════════════ 5. Settings modal ═════════════════════════
@@ -183,6 +242,7 @@ function openSettings() {
       seg([['bars', 'Полосы'], ['wave', 'Волна'], ['glow', 'Свечение'], ['off', 'Выкл']], S.visualizer, (v) => { save({ visualizer: v }); ensureAudio(); kick(); })),
     h('section', { class: 'yp-rows' },
       h('label', {}, h('span', {}, h('b', { text: 'Субтитры' }), h('small', { text: 'Синхронный текст поверх плеера' })), toggle(S.subtitles, (v) => { save({ subtitles: v }); ui.btnSubs.classList.toggle('on', v); renderSubs(true); })),
+      h('label', {}, h('span', {}, h('b', { text: 'Скрыть правую панель' }), h('small', { text: 'Убирает очередь, текст и похожие треки на экране плеера' })), toggle(S.hideSide, (v) => save({ hideSide: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Карточка «Сейчас играет»' }), h('small', { text: 'Анимированное уведомление о смене трека' })), toggle(S.nowPlayingToast, (v) => save({ nowPlayingToast: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Блокировка рекламы' }), h('small', { text: 'Сетевой фильтр + вырезание рекламы из плеера (перезапуск)' })), toggle(S.adblock, (v) => save({ adblock: v })))),
     h('footer', {},
@@ -229,20 +289,18 @@ function updateText(u) {
   switch (u.state) {
     case 'checking': return 'Проверяю обновления…';
     case 'none': return u.dev ? 'Режим разработки — обновления выключены' : 'У вас последняя версия ✓';
-    case 'available': return `Найдена версия ${u.version}, загружаю…`;
-    case 'progress': return `Загрузка обновления… ${u.percent}%`;
-    case 'ready': return `Версия ${u.version} готова к установке`;
+    case 'available': return `Вышла версия ${u.version} — установится сама при следующем запуске`;
     case 'error': return 'Не удалось проверить обновления';
   }
   return '';
 }
+let updToastShown = false;
 ipcRenderer.on('yp:update', (_e, u) => {
   lastUpdate = u;
   if (ui.updStatus) ui.updStatus.textContent = updateText(u);
-  if (!ui.toasts) return;
-  if (u.state === 'available') toast(h('div', { class: 'yp-tt' }, icon(I.update, 20), h('span', { text: `Найдено обновление ${u.version} — скачиваю в фоне` })), { id: 'upd' });
-  if (u.state === 'ready') toast(h('div', { class: 'yp-tt' }, icon(I.update, 20), h('span', { text: `YouPlay ${u.version} готов` }),
-    h('button', { class: 'yp-btn', text: 'Обновить сейчас', onclick: () => send('yp:install-update') })), { id: 'upd', timeout: 0 });
+  if (!ui.toasts || u.state !== 'available' || updToastShown) return;
+  updToastShown = true;
+  toast(h('div', { class: 'yp-tt' }, icon(I.update, 20), h('span', { text: `Вышел YouPlay ${u.version}. Он загружается в фоне и установится при следующем запуске.` })), { id: 'upd', timeout: 8000 });
 });
 
 // ═════════════════════════ 8. Player / track tracking ═════════════════════════
@@ -312,8 +370,8 @@ function extractColors(url) {
 
 function attachVideo(v) {
   if (video === v) return; video = v;
-  v.addEventListener('play', () => { playing = true; send('yp:playing', true); ensureAudio(); kick(); });
-  v.addEventListener('pause', () => { playing = false; send('yp:playing', false); });
+  v.addEventListener('play', () => { playing = true; syncPlayIcon(); send('yp:playing', true); ensureAudio(); kick(); });
+  v.addEventListener('pause', () => { playing = false; syncPlayIcon(); paintProgress(); send('yp:playing', false); });
   v.addEventListener('seeked', () => { lastLine = -2; kick(); });
   v.addEventListener('timeupdate', adCheck);
   playing = !v.paused;
@@ -375,7 +433,8 @@ function frame() {
   raf = 0;
   const needViz = analyser && S.visualizer !== 'off';
   const needLyrics = lines.length && (S.subtitles || lyricsOpen);
-  if (!video || video.paused || document.hidden || (!needViz && !needLyrics)) { relax(); return; }
+  if (!video || video.paused || document.hidden) { relax(); return; }
+  paintProgress();
   if (needViz) {
     analyser.getByteFrequencyData(freq);
     let s = 0; for (let i = 1; i <= 5; i++) s += freq[i]; // ~20–120 Hz
@@ -445,6 +504,25 @@ function drawViz() {
 
 // ═════════════════════════ 11. Lyrics ═════════════════════════
 let lines = [], plain = null, lastLine = -2, lyricsOpen = false, userScrolledAt = 0, lyricsReq = 0;
+let lyMeta = { dur: 0, tempo: false }, offset = 0, prevDuration = 0;
+const offsets = new Map();
+// Lyrics time for the current playback position. Slowed / sped-up edits are stretched versions of
+// the original recording, so their timestamps are rescaled by the ratio of the two lengths.
+function tempoRatio() {
+  if (!video || !lyMeta.dur || !isFinite(video.duration) || video.duration <= 0) return 1;
+  const k = lyMeta.dur / video.duration;
+  if (k < 0.55 || k > 1.8) return 1;
+  if (lyMeta.tempo || Math.abs(k - 1) > 0.04) return k;
+  return 1;
+}
+const lyricClock = () => video.currentTime * tempoRatio() + offset;
+const videoTimeFor = (lt) => Math.max(0, (lt - offset) / tempoRatio());
+function nudge(d, reset) {
+  offset = reset ? 0 : Math.round((offset + d) * 10) / 10;
+  if (track.key) offsets.set(track.key, offset);
+  showOffset(); lastLine = -2; kick();
+}
+function showOffset() { if (ui.offLabel) ui.offLabel.textContent = offset ? (offset > 0 ? '+' : '') + offset.toFixed(1).replace('.', ',') + ' с' : 'синхр.'; }
 function parseLRC(txt) {
   const out = [];
   for (const raw of txt.split(/\r?\n/)) {
@@ -461,9 +539,17 @@ async function loadLyrics(tr) {
   lines = []; plain = null; lastLine = -2;
   ui.lyList.replaceChildren(h('div', { class: 'yp-ly-msg' }, h('div', { class: 'yp-dots' }, h('i'), h('i'), h('i')), h('span', { text: 'Ищу текст…' })));
   renderSubs(true);
-  let r = null;
-  try { r = await ipcRenderer.invoke('yp:lyrics', { title: tr.title, artist: tr.artist, album: tr.album, duration: video && isFinite(video.duration) ? video.duration : 0 }); } catch {}
+  // the <video> switches to the new track a moment after the metadata does — wait for its real length
+  const before = prevDuration;
+  for (let i = 0; i < 20 && video && (!isFinite(video.duration) || (video.duration === before && video.currentTime > 3)); i++) await new Promise((r) => setTimeout(r, 150));
   if (my !== lyricsReq) return;
+  const dur = video && isFinite(video.duration) ? video.duration : 0;
+  prevDuration = dur;
+  let r = null;
+  try { r = await ipcRenderer.invoke('yp:lyrics', { title: tr.title, artist: tr.artist, album: tr.album, duration: dur }); } catch {}
+  if (my !== lyricsReq) return;
+  lyMeta = { dur: (r && r.duration) || 0, tempo: !!(r && r.tempo) };
+  offset = offsets.get(tr.key) || 0; showOffset();
   if (r && r.synced) lines = parseLRC(r.synced);
   else if (r && r.plain) plain = r.plain;
   renderLyricsList(r);
@@ -484,7 +570,7 @@ function renderLyricsList(r) {
   ui.lyrics.classList.remove('free');
   if (lines.length) {
     ui.lyList.replaceChildren(...lines.map((l, i) => {
-      const el = h('p', { class: 'yp-line' + (l.text ? '' : ' gap'), onclick: () => { if (video) { video.currentTime = l.t + 0.01; ui.lyrics.classList.remove('free'); } } }, ...(l.text ? wordSpans(l.text) : [h('span', { class: 'yp-note', text: '♪ ♪ ♪' })]));
+      const el = h('p', { class: 'yp-line' + (l.text ? '' : ' gap'), onclick: () => { if (video) { video.currentTime = videoTimeFor(l.t) + 0.01; ui.lyrics.classList.remove('free'); lastLine = -2; } } }, ...(l.text ? wordSpans(l.text) : [h('span', { class: 'yp-note', text: '♪ ♪ ♪' })]));
       el.style.setProperty('--d', '0'); l.el = el; l.idx = i; return el;
     }));
   } else if (plain) {
@@ -509,7 +595,7 @@ function fillWords(container, p) {
   }
 }
 function tickLyrics() {
-  const t = video.currentTime + 0.18;
+  const t = lyricClock() + 0.12;
   const i = findLine(t);
   if (i !== lastLine) { setActiveLine(i, lastLine); lastLine = i; }
   if (i >= 0) {
@@ -557,7 +643,7 @@ function renderSubs(reset) {
 function toggleLyrics(force) {
   lyricsOpen = force === undefined ? !lyricsOpen : !!force;
   ui.lyrics.classList.toggle('open', lyricsOpen);
-  if (!lyricsOpen) ui.lyrics.classList.remove('full');
+  if (!lyricsOpen) setFull(false);
   ui.btnLyrics.classList.toggle('on', lyricsOpen);
   lastLine = -2; renderSubs(true); kick();
 }
@@ -587,12 +673,6 @@ function watchdog() {
   setTimeout(watchdog, document.hidden ? 1500 : 500);
 }
 
-// thumbnail toolbar
-ipcRenderer.on('yp:media', (_e, a) => {
-  const bar = getPlayerBar(); if (!bar) return;
-  const b = a === 'prev' ? $('.previous-button', bar) : a === 'next' ? $('.next-button', bar) : $('#play-pause-button', bar);
-  if (b) b.click();
-});
 
 // ═════════════════════════ 14. Boot ═════════════════════════
 function boot() {
@@ -600,16 +680,19 @@ function boot() {
   ready.then(() => {
     buildUI();
     document.addEventListener('pointerdown', ripple, { passive: true, capture: true });
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('ytmusic-player-bar .thumbnail-image-wrapper, ytmusic-player-bar img.image')) { e.preventDefault(); e.stopPropagation(); openNowPlaying(); }
+    }, true);
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.code === 'KeyL') { e.preventDefault(); toggleLyrics(); }
       else if (e.ctrlKey && e.code === 'KeyJ') { e.preventDefault(); toggleSubs(); }
       else if (e.ctrlKey && e.code === 'Comma') { e.preventDefault(); openSettings(); }
-      else if (e.key === 'Escape') { if (modal) closeSettings(); else if (ui.lyrics.classList.contains('full')) ui.lyrics.classList.remove('full'); else if (lyricsOpen) toggleLyrics(false); }
+      else if (e.key === 'Escape') { if (modal) closeSettings(); else if (ui.lyrics.classList.contains('full')) setFull(false); else if (lyricsOpen) toggleLyrics(false); }
     }, true);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
-    if (lastUpdate) ipcRenderer.emit('yp:update', null, lastUpdate);
-    else if (S.update) { lastUpdate = S.update; }
+    chrome.runtime.sendMessage({ type: 'update-status' }).then((u) => { if (u) ipcRenderer.emit('yp:update', null, u); }).catch(() => {});
     watchdog();
+    setTimeout(guideMode, 1200); setTimeout(guideMode, 4000);
   });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();

@@ -1,0 +1,10 @@
+[
+  { "id": 1, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||doubleclick.net^", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 2, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||googlesyndication.com^", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 3, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||googleadservices.com^", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 4, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||youtube.com/pagead/", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 5, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||youtube.com/api/stats/ads", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 6, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||youtube.com/ptracking", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 7, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||youtube.com/get_midroll_", "excludedResourceTypes": ["main_frame"] } },
+  { "id": 8, "priority": 1, "action": { "type": "block" }, "condition": { "urlFilter": "||imasdk.googleapis.com^", "excludedResourceTypes": ["main_frame"] } }
+]

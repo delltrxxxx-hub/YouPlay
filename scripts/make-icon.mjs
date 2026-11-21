@@ -30,9 +30,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
 const render = (size) => new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng();
 
 mkdirSync('build', { recursive: true });
-mkdirSync('src/assets', { recursive: true });
+mkdirSync('extension/icons', { recursive: true });
 writeFileSync('build/icon.png', render(512));
-writeFileSync('src/assets/icon.png', render(256));
+for (const n of [16, 32, 48, 128]) writeFileSync(`extension/icons/${n}.png`, render(n));
 
 // ICO with embedded PNG images
 const sizes = [16, 24, 32, 48, 64, 128, 256];
@@ -51,16 +51,4 @@ sizes.forEach((s, i) => {
 });
 const ico = Buffer.concat([header, ...pngs]);
 writeFileSync('build/icon.ico', ico);
-writeFileSync('src/assets/icon.ico', ico);
-// taskbar thumbnail toolbar icons
-const thumbs = {
-  prev: 'M6 6h2v12H6zm3.5 6 8.5 6V6z',
-  play: 'M8 5v14l11-7z',
-  pause: 'M6 19h4V5H6zm8-14v14h4V5z',
-  next: 'M6 18l8.5-6L6 6zm9-12h2v12h-2z',
-};
-for (const [n, d] of Object.entries(thumbs)) {
-  const s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#fff" d="${d}"/></svg>`;
-  writeFileSync(`src/assets/thumb-${n}.png`, new Resvg(s, { fitTo: { mode: 'width', value: 32 } }).render().asPng());
-}
 console.log('icons generated');
