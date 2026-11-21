@@ -1,0 +1,68 @@
+{
+  "name": "youplay",
+  "productName": "YouPlay",
+  "version": "1.0.0",
+  "description": "YouPlay — красивый десктопный клиент YouTube Music: Liquid Glass, синхронизированный текст песен, визуализатор под бас, встроенный блокировщик рекламы.",
+  "main": "src/main.js",
+  "author": "YouPlay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/delltrxxxx-hub/YouPlay.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "electron-builder --win --x64",
+    "release": "electron-builder --win --x64 --publish always"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.20.3",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.youplay.desktop",
+    "productName": "YouPlay",
+    "copyright": "YouPlay",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["ru", "en-US", "uk"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png",
+      "artifactName": "YouPlay-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "YouPlay",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "delltrxxxx-hub",
+        "repo": "YouPlay",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
