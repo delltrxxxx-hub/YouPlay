@@ -3,7 +3,7 @@
    DOM is touched via safe APIs only (no innerHTML: YT Music enforces Trusted Types). */
 
 // ═════════════════════════ 1. Bridge to the extension background ═════════════════════════
-const DEFAULT_SETTINGS = { theme: 'studio', accent: '#ff5a36', visualizer: 'bars', subtitles: true, nowPlayingToast: false, autoNowPlaying: true, adblock: true, hideSide: false };
+const DEFAULT_SETTINGS = { theme: 'studio', accent: '#ff5a36', visualizer: 'bars', subtitles: false, nowPlayingToast: false, autoNowPlaying: true, audioOnly: true, adblock: true, hideSide: false };
 const _listeners = {};
 const ipcRenderer = {
   invoke(ch, arg) {
@@ -67,7 +67,7 @@ const send = (ch, ...a) => ipcRenderer.send(ch, ...a);
 
 // ═════════════════════════ 3. State ═════════════════════════
 let S = { autoNowPlaying: true, theme: 'glass', accent: '#ff3d77', visualizer: 'bars', subtitles: true, nowPlayingToast: true, adblock: true, version: '' };
-const ready = ipcRenderer.invoke('yp:get-settings').then((s) => { S = { ...S, ...s }; applyTheme(); return S; });
+const ready = ipcRenderer.invoke('yp:get-settings').then((s) => { if (!s.subsOff2) { s.subtitles = false; chrome.storage.local.set({ subtitles: false, subsOff2: true }); } S = { ...S, ...s }; applyTheme(); return S; });
 const THEMES = [
   { id: 'studio', name: 'Studio', desc: 'Тёплый минимализм в цветах обложки', sw: ['#ff5a36', '#3a1d14', '#120c0a'] },
   { id: 'glass', name: 'Liquid Glass', desc: 'Стекло, блики и живой фон', sw: ['#ff3d77', '#8b3dff', '#22d3ee'] },
@@ -110,11 +110,10 @@ function buildUI() {
 
   ui.fab = h('div', { id: 'yp-fab' },
     ui.btnLyrics = h('button', { class: 'yp-ic', title: 'Текст песни (Ctrl+L)', onclick: () => toggleLyrics() }, icon(I.lyrics)),
-    ui.btnSubs = h('button', { class: 'yp-ic', title: 'Субтитры (Ctrl+J)', onclick: () => toggleSubs() }, icon(I.sub)),
     ui.btnSc = h('button', { class: 'yp-ic', title: 'Добавить из SoundCloud (или просто вставьте ссылку Ctrl+V)', onclick: () => { openNowPlaying(); toggleQueue(true); setTimeout(() => ui.scInput.focus(), 350); } }, icon(I.cloud)),
     ui.btnNow = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран (Ctrl+K)', onclick: () => openNowPlaying() }, icon(I.expand)),
     ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'YouPlay — оформление и настройки', onclick: () => openSettings() }, icon(I.spark)));
-  ui.btnSubs.classList.toggle('on', !!S.subtitles);
+
 
   ui.subs = h('div', { id: 'yp-subs', 'aria-live': 'polite' }, ui.subCur = h('div', { class: 'yp-sub-cur' }), ui.subNext = h('div', { class: 'yp-sub-next' }));
 
@@ -173,6 +172,8 @@ function buildUI() {
   ui.root = h('div', { id: 'yp-root' }, ui.canvas, ui.subs, ui.lyrics, ui.scBar, ui.fab, ui.np, ui.toasts);
   document.body.prepend(backdrop);
   document.body.append(ui.root);
+  const fit = () => document.documentElement.style.setProperty('--yp-fab-w', (ui.fab.offsetWidth || 200) + 'px');
+  requestAnimationFrame(fit); setTimeout(fit, 1000);
   ui.backdrop = backdrop;
   window.addEventListener('resize', sizeCanvas, { passive: true });
   sizeCanvas();
@@ -321,7 +322,9 @@ function openSettings() {
     h('section', {}, h('h3', { text: 'Визуализатор под бас' }),
       seg([['bars', 'Полосы'], ['wave', 'Волна'], ['glow', 'Свечение'], ['off', 'Выкл']], S.visualizer, (v) => { save({ visualizer: v }); ensureAudio(); kick(); })),
     h('section', { class: 'yp-rows' },
-      h('label', {}, h('span', {}, h('b', { text: 'Субтитры' }), h('small', { text: 'Синхронный текст поверх плеера' })), toggle(S.subtitles, (v) => { save({ subtitles: v }); ui.btnSubs.classList.toggle('on', v); renderSubs(true); })),
+      h('label', {}, h('span', {}, h('b', { text: 'Субтитры' }), h('small', { text: 'Синхронный текст поверх плеера' })), toggle(S.subtitles, (v) => { save({ subtitles: v }); renderSubs(true); })),
+      h('label', {}, h('span', {}, h('b', { text: 'Искать и в SoundCloud' }), h('small', { text: 'При поиске справа открываются результаты SoundCloud' })), toggle(S.scSearch !== false, (v) => { save({ scSearch: v }); sendHost(v ? 'search:' + (lastSearch || '') : 'search-close'); })),
+      h('label', {}, h('span', {}, h('b', { text: 'Треки вместо клипов' }), h('small', { text: 'Если включился клип, сразу переключать на аудиоверсию' })), toggle(S.audioOnly !== false, (v) => save({ audioOnly: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Скрыть правую панель' }), h('small', { text: 'Убирает очередь, текст и похожие треки на экране плеера' })), toggle(S.hideSide, (v) => save({ hideSide: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Открывать «Сейчас играет» при запуске трека' }), h('small', { text: 'Полноэкранный плеер с текстом и очередью' })), toggle(S.autoNowPlaying, (v) => save({ autoNowPlaying: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Карточка при смене трека' }), h('small', { text: 'Небольшое уведомление сверху' })), toggle(S.nowPlayingToast, (v) => save({ nowPlayingToast: v }))),
@@ -742,8 +745,7 @@ function toggleLyrics(force) {
   lastLine = -2; renderSubs(true); kick();
 }
 function toggleSubs() {
-  save({ subtitles: !S.subtitles }); ui.btnSubs.classList.toggle('on', S.subtitles);
-  toast(h('div', { class: 'yp-tt' }, icon(I.sub, 20), h('span', { text: S.subtitles ? 'Субтитры включены' : 'Субтитры выключены' })), { id: 'subs', timeout: 1600 });
+  save({ subtitles: !S.subtitles }); toast(h('div', { class: 'yp-tt' }, icon(I.sub, 20), h('span', { text: S.subtitles ? 'Субтитры включены' : 'Субтитры выключены' })), { id: 'subs', timeout: 1600 });
   lastLine = -2; renderSubs(true); kick();
 }
 
@@ -758,7 +760,43 @@ function ripple(e) {
 }
 
 // ═════════════════════════ 13. Watchdog loop (cheap, 2–4 Hz) ═════════════════════════
+function sendHost(m) { document.documentElement.dataset.ypMsg = JSON.stringify({ t: Date.now() + Math.random(), m }); }
+let lastSearch = null;
+function searchSync() {
+  let q = '';
+  if (location.pathname === '/search') q = new URLSearchParams(location.search).get('q') || '';
+  if (q !== lastSearch) { lastSearch = q; if (S.scSearch !== false) sendHost('search:' + q); }
+}
+// tracks sent from the SoundCloud panel (via the YouPlay window)
+window.addEventListener('message', (e) => {
+  if (e.source !== window || !e.data || typeof e.data.ypScAdd !== 'string') return;
+  try { scAdd(e.data.ypScAdd, !!e.data.now); } catch {}
+});
+// music videos → the audio ("Трек"/"Song") version whenever YouTube Music offers it
+function preferAudio() {
+  if (S.audioOnly === false) return;
+  const t = $('ytmusic-av-toggle');
+  if (!t || t.getAttribute('is-video-playback-mode-selected') !== 'true') return;
+  const song = t.querySelector('button.song-button');
+  if (song && song.getAttribute('aria-pressed') !== 'true') song.click();
+}
+// Premium upsell dialogs and banners: dismiss them
+function dismissUpsells() {
+  for (const d of document.querySelectorAll('tp-yt-paper-dialog, ytmusic-mealbar-promo-renderer, yt-mealbar-promo-renderer, ytmusic-statement-banner-renderer')) {
+    if (d.dataset.ypSeen || !d.isConnected || getComputedStyle(d).display === 'none') continue;
+    const txt = d.textContent || '';
+    if (!/Premium|без рекламы|ad-free|Попробуйте бесплатно|Try it free|подписк/i.test(txt)) continue;
+    d.dataset.ypSeen = '1';
+    const btn = [...d.querySelectorAll('button, tp-yt-paper-button, a')].find((b) => /нет, спасибо|не сейчас|no thanks|not now|закрыть|close|dismiss|отклонить|позже/i.test((b.textContent || '') + ' ' + (b.getAttribute('aria-label') || '')));
+    if (btn) btn.click();
+    d.style.setProperty('display', 'none', 'important');
+    const backdrop = $('tp-yt-iron-overlay-backdrop.opened'); if (backdrop) backdrop.classList.remove('opened');
+  }
+}
 function watchdog() {
+  searchSync();
+  preferAudio();
+  dismissUpsells();
   const v = $('video'); if (v) attachVideo(v);
   const tr = readTrack(); if (tr && tr.key !== track.key && !scOn()) onTrackChange(tr);
   adCheck();

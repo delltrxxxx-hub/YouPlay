@@ -1,13 +1,3 @@
-// YouPlay window bridge (main world): tells the native window which title-bar colour to use.
-(function () {
-  const wv = window.chrome && window.chrome.webview;
-  if (!wv) return;
-  let last = '';
-  const send = () => { const c = document.documentElement && document.documentElement.dataset.ypCaption; if (c && c !== last) { last = c; wv.postMessage('caption:' + c); } };
-  const start = () => { send(); new MutationObserver(send).observe(document.documentElement, { attributes: true, attributeFilter: ['data-yp-caption'] }); };
-  if (document.documentElement) start(); else document.addEventListener('DOMContentLoaded', start, { once: true });
-})();
-
 // YouPlay — runs in the page's main world at document_start: strips ads from player responses.
 (function () {
   if (localStorage.getItem('yp-adblock') === '0') return;

@@ -24,7 +24,10 @@ static class Program
 {
     public const string Version = "__VERSION__";
     public const string Repo = "delltrxxxx-hub/YouPlay";
-    public static readonly string Data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YouPlay");
+    // YOUPLAY_DATA_DIR lets a test copy run with its own profile, separate from the real one
+    public static readonly string Data = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("YOUPLAY_DATA_DIR"))
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YouPlay")
+        : Environment.GetEnvironmentVariable("YOUPLAY_DATA_DIR");
 
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
@@ -34,7 +37,7 @@ static class Program
     static void Main(string[] args)
     {
         bool first;
-        using (var mutex = new Mutex(true, "YouPlay.SingleInstance", out first))
+        using (var mutex = new Mutex(true, "YouPlay.SingleInstance." + Data.GetHashCode().ToString("x"), out first))
         {
             if (!first)
             {
@@ -56,6 +59,11 @@ static class Program
 class MainWindow : Form
 {
     readonly WebView2 web = new WebView2();
+    readonly WebView2 sc = new WebView2();         // SoundCloud search panel (the real soundcloud.com)
+    readonly Splitter split = new Splitter();
+    CoreWebView2Environment env;
+    string scQuery = null;
+    bool isFull; FormWindowState prevState; Rectangle prevBounds;
     readonly string boundsFile = Path.Combine(Program.Data, "window.txt");
 
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
@@ -70,7 +78,18 @@ class MainWindow : Form
         RestoreBounds_();
         web.Dock = DockStyle.Fill;
         web.DefaultBackgroundColor = Color.FromArgb(18, 13, 11);
+        sc.Dock = DockStyle.Right;
+        sc.DefaultBackgroundColor = Color.FromArgb(18, 13, 11);
+        sc.Visible = false;
+        split.Dock = DockStyle.Right;
+        split.Width = 4;
+        split.BackColor = Color.FromArgb(40, 30, 26);
+        split.Visible = false;
         Controls.Add(web);
+        Controls.Add(split);
+        Controls.Add(sc);
+        KeyPreview = true;
+        KeyDown += (s, e) => { if (e.KeyCode == Keys.F11) ToggleFullscreen(); else if (e.KeyCode == Keys.Escape && isFull) ToggleFullscreen(); };
         Load += async (s, e) => await InitWeb();
         FormClosing += (s, e) => SaveBounds();
     }
@@ -100,7 +119,7 @@ class MainWindow : Form
         {
             var opts = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required" + DebugArgs());
             opts.AreBrowserExtensionsEnabled = true;
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.Data, "WebView2"), opts);
+            env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.Data, "WebView2"), opts);
             await web.EnsureCoreWebView2Async(env);
         }
         catch (Exception ex)
@@ -149,22 +168,91 @@ class MainWindow : Form
             t = Regex.Replace(t, @"\s*[-–]\s*YouTube Music\s*$", "");
             Text = string.IsNullOrWhiteSpace(t) || t == "YouTube Music" ? "YouPlay" : t + " — YouPlay";
         };
-        core.WebMessageReceived += (s, e) =>
-        {
-            try
-            {
-                var m = Regex.Match(e.TryGetWebMessageAsString() ?? "", "^caption:#([0-9a-fA-F]{6})$");
-                if (m.Success)
-                {
-                    int rgb = Convert.ToInt32(m.Groups[1].Value, 16);
-                    int bgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
-                    SetCaption(bgr);
-                    BackColor = Color.FromArgb((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
-                }
-            }
-            catch { }
-        };
+        core.WebMessageReceived += (s, e) => { try { OnMessage(e.TryGetWebMessageAsString() ?? ""); } catch { } };
+        core.ContainsFullScreenElementChanged += (s, e) => { if (core.ContainsFullScreenElement != isFull) ToggleFullscreen(); };
         core.Navigate("https://music.youtube.com/");
+    }
+
+    void OnMessage(string msg)
+    {
+        var m = Regex.Match(msg, "^caption:#([0-9a-fA-F]{6})$");
+        if (m.Success)
+        {
+            int rgb = Convert.ToInt32(m.Groups[1].Value, 16);
+            int bgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
+            SetCaption(bgr);
+            var c = Color.FromArgb((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+            BackColor = c; split.BackColor = ControlPaint.Light(c, 0.15f);
+            return;
+        }
+        if (msg == "fullscreen") { ToggleFullscreen(); return; }
+        if (msg.StartsWith("search:")) { ShowSoundCloudSearch(msg.Substring(7)); return; }
+        if (msg == "search-close") { HideSoundCloud(); return; }
+        var a = Regex.Match(msg, "^scadd:(now|queue):(https://[^\\s'\"<>]+)$");
+        if (a.Success && web.CoreWebView2 != null)
+        {
+            string js = "window.postMessage({ ypScAdd: " + JsString(a.Groups[2].Value) + ", now: " + (a.Groups[1].Value == "now" ? "true" : "false") + " }, 'https://music.youtube.com');";
+            web.CoreWebView2.ExecuteScriptAsync(js);
+        }
+    }
+
+    static string JsString(string v) { return "\"" + v.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; }
+
+    // ── SoundCloud search panel: the real soundcloud.com, side by side with YouTube Music ──
+    async void ShowSoundCloudSearch(string q)
+    {
+        q = (q ?? "").Trim();
+        if (q.Length == 0) { HideSoundCloud(); return; }
+        if (q == scQuery && sc.Visible) return;
+        scQuery = q;
+        if (sc.CoreWebView2 == null)
+        {
+            try { await sc.EnsureCoreWebView2Async(env); } catch { return; }
+            var core = sc.CoreWebView2;
+            core.Settings.IsStatusBarEnabled = false;
+            core.Settings.IsGeneralAutofillEnabled = false;
+            core.Settings.IsPasswordAutosaveEnabled = false;
+            core.WebMessageReceived += (s, e) => { try { OnMessage(e.TryGetWebMessageAsString() ?? ""); } catch { } };
+            core.NewWindowRequested += (s, e) => { e.Handled = true; if (IsSoundCloud(e.Uri)) core.Navigate(e.Uri); else OpenExternal(e.Uri); };
+            core.NavigationStarting += (s, e) => { if (!IsSoundCloud(e.Uri)) { e.Cancel = true; OpenExternal(e.Uri); } };
+        }
+        sc.Width = Math.Max(380, (int)(ClientSize.Width * 0.42));
+        sc.Visible = split.Visible = true;
+        sc.CoreWebView2.Navigate("https://soundcloud.com/search/sounds?q=" + Uri.EscapeDataString(q));
+    }
+
+    void HideSoundCloud()
+    {
+        scQuery = null;
+        sc.Visible = split.Visible = false;
+        try { if (sc.CoreWebView2 != null) sc.CoreWebView2.Navigate("about:blank"); } catch { }
+    }
+
+    static bool IsSoundCloud(string url)
+    {
+        try { var h = new Uri(url).Host.ToLowerInvariant(); return Regex.IsMatch(h, @"(^|\.)(soundcloud\.com|sndcdn\.com|soundcloud\.cloud)$") || url.StartsWith("about:"); }
+        catch { return false; }
+    }
+
+    // ── F11 / YouTube Music fullscreen ──
+    void ToggleFullscreen()
+    {
+        if (!isFull)
+        {
+            prevState = WindowState; prevBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            isFull = true;
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.None;
+            Bounds = Screen.FromControl(this).Bounds;
+        }
+        else
+        {
+            isFull = false;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            Bounds = prevBounds;
+            WindowState = prevState;
+            SetCaption(0x0B0D12);
+        }
     }
 
     static string DebugArgs()

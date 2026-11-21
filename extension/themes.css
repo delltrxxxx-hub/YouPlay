@@ -26,7 +26,7 @@ html {
 }
 
 /* room for the YouPlay buttons, top right */
-ytmusic-nav-bar .right-content { margin-right: 150px !important; }
+ytmusic-nav-bar .right-content { margin-right: calc(var(--yp-fab-w, 200px) + 36px) !important; }
 
 /* search suggestions: always an opaque, readable surface */
 html { --yp-menu-bg: rgba(18,14,26,.96); }
@@ -49,6 +49,10 @@ html[data-yp-hide-side="1"] ytmusic-player-page #main-panel { flex: 1 1 auto !im
 ytmusic-mealbar-promo-renderer, ytmusic-premium-upsell-renderer,
 tp-yt-paper-dialog:has(ytmusic-mealbar-promo-renderer),
 ytmusic-guide-entry-renderer:has(a[href*="music_premium"]),
+ytmusic-download-button-renderer, ytmusic-menu-service-item-download-renderer,
+ytmusic-menu-navigation-item-renderer:has(a[href*="music_premium"]),
+ytmusic-upsell-dialog-renderer, tp-yt-paper-dialog:has(ytmusic-upsell-dialog-renderer),
+yt-mealbar-promo-renderer, ytmusic-guide-entry-renderer:has([href*="premium"]),
 .ytmusic-player-bar .badge-style-type-ad-stark { display: none !important; }
 
 /* our own backdrop replaces YTM's page hero images */
