@@ -59,10 +59,11 @@ static class Program
 class MainWindow : Form
 {
     readonly WebView2 web = new WebView2();
-    readonly WebView2 sc = new WebView2();         // SoundCloud search panel (the real soundcloud.com)
-    readonly Splitter split = new Splitter();
+    readonly WebView2 sc = new WebView2();         // hidden soundcloud.com page: search results + likes for YouPlay
     CoreWebView2Environment env;
-    string scQuery = null;
+    readonly System.Collections.Generic.Queue<string[]> scJobs = new System.Collections.Generic.Queue<string[]>();
+    string scBusy = null;
+    readonly System.Windows.Forms.Timer scTimer = new System.Windows.Forms.Timer();
     bool isFull; FormWindowState prevState; Rectangle prevBounds;
     readonly string boundsFile = Path.Combine(Program.Data, "window.txt");
 
@@ -78,16 +79,16 @@ class MainWindow : Form
         RestoreBounds_();
         web.Dock = DockStyle.Fill;
         web.DefaultBackgroundColor = Color.FromArgb(18, 13, 11);
-        sc.Dock = DockStyle.Right;
+        // the SoundCloud page lives behind the main view: rendered (so its lists load) but never seen
+        sc.Dock = DockStyle.None;
+        sc.Location = new Point(0, 0);
+        sc.Size = new Size(1100, 900);
         sc.DefaultBackgroundColor = Color.FromArgb(18, 13, 11);
-        sc.Visible = false;
-        split.Dock = DockStyle.Right;
-        split.Width = 4;
-        split.BackColor = Color.FromArgb(40, 30, 26);
-        split.Visible = false;
-        Controls.Add(web);
-        Controls.Add(split);
         Controls.Add(sc);
+        Controls.Add(web);
+        web.BringToFront();
+        scTimer.Interval = 30000;
+        scTimer.Tick += (s, e) => { scTimer.Stop(); if (scBusy != null) { PostToYt("{\"ypScData\":{\"id\":" + JsString(scBusy) + ",\"error\":\"timeout\"}}"); scBusy = null; ScNext(); } };
         KeyPreview = true;
         KeyDown += (s, e) => { if (e.KeyCode == Keys.F11) ToggleFullscreen(); else if (e.KeyCode == Keys.Escape && isFull) ToggleFullscreen(); };
         Load += async (s, e) => await InitWeb();
@@ -182,50 +183,86 @@ class MainWindow : Form
             int bgr = ((rgb & 0xFF) << 16) | (rgb & 0xFF00) | ((rgb >> 16) & 0xFF);
             SetCaption(bgr);
             var c = Color.FromArgb((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
-            BackColor = c; split.BackColor = ControlPaint.Light(c, 0.15f);
+            BackColor = c;
             return;
         }
         if (msg == "fullscreen") { ToggleFullscreen(); return; }
-        if (msg.StartsWith("search:")) { ShowSoundCloudSearch(msg.Substring(7)); return; }
-        if (msg == "search-close") { HideSoundCloud(); return; }
-        var a = Regex.Match(msg, "^scadd:(now|queue):(https://[^\\s'\"<>]+)$");
-        if (a.Success && web.CoreWebView2 != null)
+        // YouTube Music page asks for SoundCloud data: sc:<op>:<id>:<arg>
+        var j = Regex.Match(msg, "^sc:(search|likes|like):([A-Za-z0-9_-]{1,40}):(.*)$", RegexOptions.Singleline);
+        if (j.Success) { scJobs.Enqueue(new[] { j.Groups[1].Value, j.Groups[2].Value, j.Groups[3].Value }); if (scBusy == null) ScNext(); return; }
+        if (msg == "sclogin") { ScLogin(); return; }
+        // the hidden SoundCloud page answers: scdata:{json}
+        if (msg.StartsWith("scdata:"))
         {
-            string js = "window.postMessage({ ypScAdd: " + JsString(a.Groups[2].Value) + ", now: " + (a.Groups[1].Value == "now" ? "true" : "false") + " }, 'https://music.youtube.com');";
-            web.CoreWebView2.ExecuteScriptAsync(js);
+            var json = msg.Substring(7);
+            var idm = Regex.Match(json, "\"id\"\\s*:\\s*\"([A-Za-z0-9_-]+)\"");
+            PostToYt("{\"ypScData\":" + json + "}");
+            if (idm.Success && idm.Groups[1].Value == scBusy) { scTimer.Stop(); scBusy = null; ScNext(); }
         }
+    }
+
+    void PostToYt(string json)
+    {
+        try { if (web.CoreWebView2 != null) web.CoreWebView2.ExecuteScriptAsync("window.postMessage(" + json + ", 'https://music.youtube.com');"); } catch { }
     }
 
     static string JsString(string v) { return "\"" + v.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""; }
 
-    // ── SoundCloud search panel: the real soundcloud.com, side by side with YouTube Music ──
-    async void ShowSoundCloudSearch(string q)
+    // ── hidden SoundCloud page: one job at a time ──
+    async void ScNext()
     {
-        q = (q ?? "").Trim();
-        if (q.Length == 0) { HideSoundCloud(); return; }
-        if (q == scQuery && sc.Visible) return;
-        scQuery = q;
+        if (scBusy != null || scJobs.Count == 0) return;
+        var job = scJobs.Dequeue();
+        string op = job[0], id = job[1], arg = job[2];
+        string url;
+        if (op == "search") url = "https://soundcloud.com/search/sounds?q=" + Uri.EscapeDataString(arg) + "&yp=" + id + "#yp=search:" + id;
+        else if (op == "likes") url = "https://soundcloud.com/you/likes?yp=" + id + "#yp=likes:" + id;
+        else if (IsSoundCloud(arg) && arg.StartsWith("https://")) url = arg.Split('#')[0] + (arg.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=like:" + id;
+        else { PostToYt("{\"ypScData\":{\"id\":" + JsString(id) + ",\"error\":\"bad\"}}"); ScNext(); return; }
+        scBusy = id;
         if (sc.CoreWebView2 == null)
         {
-            try { await sc.EnsureCoreWebView2Async(env); } catch { return; }
+            try { await sc.EnsureCoreWebView2Async(env); }
+            catch { scBusy = null; return; }
             var core = sc.CoreWebView2;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsGeneralAutofillEnabled = false;
             core.Settings.IsPasswordAutosaveEnabled = false;
+            core.Settings.AreDefaultScriptDialogsEnabled = false;
+            core.IsMuted = true;                                   // never makes a sound
             core.WebMessageReceived += (s, e) => { try { OnMessage(e.TryGetWebMessageAsString() ?? ""); } catch { } };
-            core.NewWindowRequested += (s, e) => { e.Handled = true; if (IsSoundCloud(e.Uri)) core.Navigate(e.Uri); else OpenExternal(e.Uri); };
-            core.NavigationStarting += (s, e) => { if (!IsSoundCloud(e.Uri)) { e.Cancel = true; OpenExternal(e.Uri); } };
+            core.NewWindowRequested += (s, e) => { e.Handled = true; };
+            core.NavigationStarting += (s, e) => { if (!IsSoundCloud(e.Uri)) e.Cancel = true; };
         }
-        sc.Width = Math.Max(380, (int)(ClientSize.Width * 0.42));
-        sc.Visible = split.Visible = true;
-        sc.CoreWebView2.Navigate("https://soundcloud.com/search/sounds?q=" + Uri.EscapeDataString(q));
+        scTimer.Stop(); scTimer.Start();
+        sc.CoreWebView2.Navigate(url);
     }
 
-    void HideSoundCloud()
+    // ── SoundCloud sign-in window (the real soundcloud.com sign-in page) ──
+    Form scLoginForm;
+    async void ScLogin()
     {
-        scQuery = null;
-        sc.Visible = split.Visible = false;
-        try { if (sc.CoreWebView2 != null) sc.CoreWebView2.Navigate("about:blank"); } catch { }
+        if (scLoginForm != null && !scLoginForm.IsDisposed) { scLoginForm.Activate(); return; }
+        var f = new Form { Text = "Вход в SoundCloud — YouPlay", Size = new Size(560, 780), StartPosition = FormStartPosition.CenterParent, Icon = Icon, BackColor = BackColor };
+        var w = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(18, 13, 11) };
+        f.Controls.Add(w);
+        scLoginForm = f;
+        bool ok = false;
+        f.FormClosed += (s, e) => PostToYt("{\"ypScLogin\":" + (ok ? "true" : "false") + "}");
+        f.Show(this);
+        try { await w.EnsureCoreWebView2Async(env); } catch { f.Close(); return; }
+        w.CoreWebView2.NavigationCompleted += async (s, e) =>
+        {
+            try
+            {
+                var u = w.CoreWebView2.Source ?? "";
+                if (!Regex.IsMatch(u, "^https://(www\\.)?soundcloud\\.com/") || u.Contains("/signin")) return;
+                var cookies = await w.CoreWebView2.CookieManager.GetCookiesAsync("https://soundcloud.com");
+                foreach (var c in cookies) if (c.Name == "oauth_token" && c.Value.Length > 0) { ok = true; f.Close(); return; }
+            }
+            catch { }
+        };
+        w.CoreWebView2.Navigate("https://soundcloud.com/signin");
     }
 
     static bool IsSoundCloud(string url)

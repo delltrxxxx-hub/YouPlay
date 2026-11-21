@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouPlay",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "YouPlay — красивый YouTube Music: стили, синхронный текст, визуализатор, без рекламы.",
   "icons": {
     "16": "icons/16.png",
@@ -44,6 +44,16 @@
     },
     {
       "matches": [
+        "https://music.youtube.com/*"
+      ],
+      "js": [
+        "ytapi.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
         "https://music.youtube.com/*",
         "https://soundcloud.com/*"
       ],
@@ -55,16 +65,28 @@
     },
     {
       "matches": [
+        "https://soundcloud.com/*"
+      ],
+      "js": [
+        "sc-main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
         "https://music.youtube.com/*"
       ],
       "js": [
         "content.js",
-        "soundcloud.js"
+        "soundcloud.js",
+        "hub.js"
       ],
       "css": [
         "themes.css",
         "player.css",
         "sc.css",
+        "hub.css",
         "icons.css"
       ],
       "run_at": "document_start"
@@ -75,9 +97,6 @@
       ],
       "js": [
         "sc-page.js"
-      ],
-      "css": [
-        "sc-page.css"
       ],
       "run_at": "document_start"
     }

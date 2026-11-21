@@ -59,6 +59,7 @@ const I = {
   shuffle: 'M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z',
   repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
   queue: 'M4 6h12v2H4zm0 5h12v2H4zm0 5h8v2H4zm12 0v-5l5 3.5z',
+  heart: 'M12 20.6c-.2 0-.3 0-.5-.1C11.2 20.3 3.5 15.7 3.5 9.5a5.3 5.3 0 0 1 8.5-4.2 5.3 5.3 0 0 1 8.5 4.2c0 6.2-7.7 10.8-8 11-.2.1-.3.1-.5.1z',
   cloud: 'M19.4 10.2A6.5 6.5 0 0 0 7.1 8.6 4.8 4.8 0 0 0 7.5 18.2h11.4a4 4 0 0 0 .5-8z',
   update: 'M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1a6.88 6.88 0 0 0 0 9.8 7.02 7.02 0 0 0 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58a8.987 8.987 0 0 1 12.65 0L21 3v7.12z',
 };
@@ -110,6 +111,7 @@ function buildUI() {
 
   ui.fab = h('div', { id: 'yp-fab' },
     ui.btnLyrics = h('button', { class: 'yp-ic', title: 'Текст песни (Ctrl+L)', onclick: () => toggleLyrics() }, icon(I.lyrics)),
+    ui.btnLikes = h('button', { class: 'yp-ic', title: 'Любимое — лайки YouTube Music и SoundCloud вместе', onclick: () => { try { openLikes(); } catch {} } }, icon(I.heart)),
     ui.btnSc = h('button', { class: 'yp-ic', title: 'Добавить из SoundCloud (или просто вставьте ссылку Ctrl+V)', onclick: () => { openNowPlaying(); toggleQueue(true); setTimeout(() => ui.scInput.focus(), 350); } }, icon(I.cloud)),
     ui.btnNow = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран (Ctrl+K)', onclick: () => openNowPlaying() }, icon(I.expand)),
     ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'YouPlay — оформление и настройки', onclick: () => openSettings() }, icon(I.spark)));
@@ -199,6 +201,7 @@ function ytQueueItems() {
 }
 function renderQueue() {
   if (!queueOpen) return;
+  try { if (hubRenderQueue()) return; } catch {}
   const items = ytQueueItems();
   let sc = []; try { sc = scRows(); } catch {}
   const total = items.length + sc.length;
@@ -323,7 +326,6 @@ function openSettings() {
       seg([['bars', 'Полосы'], ['wave', 'Волна'], ['glow', 'Свечение'], ['off', 'Выкл']], S.visualizer, (v) => { save({ visualizer: v }); ensureAudio(); kick(); })),
     h('section', { class: 'yp-rows' },
       h('label', {}, h('span', {}, h('b', { text: 'Субтитры' }), h('small', { text: 'Синхронный текст поверх плеера' })), toggle(S.subtitles, (v) => { save({ subtitles: v }); renderSubs(true); })),
-      h('label', {}, h('span', {}, h('b', { text: 'Искать и в SoundCloud' }), h('small', { text: 'При поиске справа открываются результаты SoundCloud' })), toggle(S.scSearch !== false, (v) => { save({ scSearch: v }); sendHost(v ? 'search:' + (lastSearch || '') : 'search-close'); })),
       h('label', {}, h('span', {}, h('b', { text: 'Треки вместо клипов' }), h('small', { text: 'Если включился клип, сразу переключать на аудиоверсию' })), toggle(S.audioOnly !== false, (v) => save({ audioOnly: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Скрыть правую панель' }), h('small', { text: 'Убирает очередь, текст и похожие треки на экране плеера' })), toggle(S.hideSide, (v) => save({ hideSide: v }))),
       h('label', {}, h('span', {}, h('b', { text: 'Открывать «Сейчас играет» при запуске трека' }), h('small', { text: 'Полноэкранный плеер с текстом и очередью' })), toggle(S.autoNowPlaying, (v) => save({ autoNowPlaying: v }))),
@@ -526,7 +528,7 @@ function frame() {
   const ytPlaying = video && !video.paused;
   if (document.hidden || !(ytPlaying || (scOn() && !SC.paused))) { relax(); return; }
   paintProgress();
-  if (!scOn()) { try { scWatchEnd(); } catch {} }
+  if (!scOn()) { try { scWatchEnd(); } catch {} try { hubWatchEnd(); } catch {} }
   if (needViz) {
     analyser.getByteFrequencyData(freq);
     let s = 0; for (let i = 1; i <= 5; i++) s += freq[i]; // ~20–120 Hz
@@ -765,7 +767,7 @@ let lastSearch = null;
 function searchSync() {
   let q = '';
   if (location.pathname === '/search') q = new URLSearchParams(location.search).get('q') || '';
-  if (q !== lastSearch) { lastSearch = q; if (S.scSearch !== false) sendHost('search:' + q); }
+  lastSearch = q;
 }
 // tracks sent from the SoundCloud panel (via the YouPlay window)
 window.addEventListener('message', (e) => {

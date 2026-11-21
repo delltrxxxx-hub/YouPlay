@@ -53,6 +53,7 @@ function scStop(resumeYt) {
   syncPlayIcon();
 }
 function scFinished() {
+  try { if (HUB.list && hubOnScFinished()) return; } catch {}   // YouPlay mixed play list decides what's next
   if (!scPlayNext()) scStop('next');   // back to YouTube Music: its next track
 }
 
