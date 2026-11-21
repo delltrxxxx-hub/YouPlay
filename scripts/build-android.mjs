@@ -55,10 +55,15 @@ const keepAwake = `try {
 } catch (e) {}`;
 writeFileSync(join(OUT, 'assets', 'engine.js'), once('__ypEngLoaded', [keepAwake, E('shield.js'), E('engine.js')].join(NL)));
 writeFileSync(join(OUT, 'assets', 'sc.js'), once('__ypScLoaded', ['window.chrome = window.chrome || {}; window.chrome.webview = { postMessage: (m) => window.YouPlayNative.postHost(String(m)) };', E('sc-bridge.js'), E('sc-main.js'), E('sc-page.js')].join(NL)));
-mkdirSync(join(OUT, 'assets', 'app'), { recursive: true });
-for (const f of readdirSync('app')) copyFileSync(join('app', f), join(OUT, 'assets', 'app', f));
 for (const f of ['engine.js', 'sc.js']) run(process.execPath, ['--check', join(OUT, 'assets', f)]);
-run(process.execPath, ['--check', join('app', 'app.js')]);
+// native icons: every YouPlay glyph as a white drawable, tinted in code
+globalThis.window = {}; globalThis.document = { addEventListener() {} };
+new Function(readFileSync('app/icons.js', 'utf8'))();
+mkdirSync(join(OUT, 'res', 'drawable-xxhdpi'), { recursive: true });
+for (const [name, d] of Object.entries(window.YP_ICONS)) {
+  const p = d.f ? '<path d="' + d.f + '" fill="#fff"/>' : '<path d="' + d.s + '" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  writeFileSync(join(OUT, 'res', 'drawable-xxhdpi', 'i_' + name.toLowerCase() + '.png'), png('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + p + '</svg>', 96));
+}
 
 // 3. resources + manifest → base apk (+ R.java)
 run(join(BT, 'aapt2.exe'), ['compile', '--dir', join(OUT, 'res'), '-o', join(OUT, 'res.zip')]);

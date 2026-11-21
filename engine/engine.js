@@ -76,7 +76,7 @@
     while (Date.now() - t0 < timeout) {
       await wait(200);
       if (!match()) continue;
-      const n = $('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer', pageRoot()).length;
+      const n = $$('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer', pageRoot()).length;
       if (n > 0 && n === last) { if (++stable >= 3) return true; } else stable = 0;
       last = n;
     }
