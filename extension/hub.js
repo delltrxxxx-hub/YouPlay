@@ -38,6 +38,7 @@ let ytLikeDates = {};
 ready.then(() => store.get('ytLikeDates')).then((v) => { ytLikeDates = v || {}; });
 
 // ───────── shell ─────────
+const setKids = (el, ...kids) => el.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
 function hubEl() {
   if (HUB.el) return HUB.el;
   HUB.el = h('section', { id: 'yp-hub' });
@@ -138,7 +139,7 @@ function renderSearch() {
   const el = hubEl();
   const items = merged();
   const tab = (id, label, n) => h('button', { class: 'yp-h-tab' + (HUB.filter === id ? ' on' : ''), onclick: () => { HUB.filter = id; render(); } }, label, n != null ? h('i', { text: String(n) }) : null);
-  el.replaceChildren(
+  setKids(el, 
     h('header', { class: 'yp-h-head' },
       h('div', {}, h('small', { text: 'Поиск' }), h('h1', { text: HUB.q })),
       h('div', { class: 'yp-h-tabs' }, tab('all', 'Всё', HUB.yt.length + HUB.sc.length), tab('yt', 'YouTube Music', HUB.yt.length), tab('sc', 'SoundCloud', HUB.scState === 'loading' ? '…' : HUB.sc.length)),
@@ -253,7 +254,7 @@ function renderLikes() {
   const el = hubEl(); const L = HUB.likes;
   const all = mergedLikes();
   const nYt = L.yt.length, nSc = L.sc.length;
-  el.replaceChildren(
+  setKids(el, 
     h('header', { class: 'yp-h-head likes' },
       h('div', { class: 'yp-h-cover' }, icon(I.heart || I.lyrics, 64)),
       h('div', { class: 'yp-h-ttl' }, h('small', { text: 'Плейлист' }), h('h1', { text: 'Любимое' }),

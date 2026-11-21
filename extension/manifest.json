@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouPlay",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "YouPlay — красивый YouTube Music: стили, синхронный текст, визуализатор, без рекламы.",
   "icons": {
     "16": "icons/16.png",
@@ -80,7 +80,8 @@
       "js": [
         "content.js",
         "soundcloud.js",
-        "hub.js"
+        "hub.js",
+        "mobile.js"
       ],
       "css": [
         "themes.css",
@@ -88,6 +89,7 @@
         "sc.css",
         "hub.css",
         "ui2.css",
+        "mobile.css",
         "icons.css"
       ],
       "run_at": "document_start"

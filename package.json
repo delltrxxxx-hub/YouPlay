@@ -1,7 +1,7 @@
 {
   "name": "youplay",
   "productName": "YouPlay",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "YouPlay — красивый клиент YouTube Music для Windows на базе Microsoft Edge: стили, синхронный текст, визуализатор, без рекламы.",
   "author": "YouPlay",
   "license": "MIT",
@@ -12,7 +12,8 @@
   "scripts": {
     "icon": "node scripts/make-icon.mjs",
     "build": "node scripts/build.mjs",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "build:android": "node scripts/build-android.mjs"
   },
   "dependencies": {},
   "devDependencies": {
