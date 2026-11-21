@@ -246,6 +246,7 @@ function ytLikeBtn(kind) {
 function scIsLiked(url) { try { return HUB.likes.sc.some((x) => x.url === url); } catch { return false; } }
 function syncLikeState() {
   if (!ui.npLike) return;
+  if (ui.lyTitle.title !== ui.lyTitle.textContent) ui.lyTitle.title = ui.lyTitle.textContent;   // full name on hover when it is cut
   const it = nowItem();
   let liked = false, dis = false;
   if (it && it.src === 'yt') { const l = ytLikeBtn('like'), d = ytLikeBtn('dislike'); liked = !!l && l.getAttribute('aria-pressed') === 'true'; dis = !!d && d.getAttribute('aria-pressed') === 'true'; }

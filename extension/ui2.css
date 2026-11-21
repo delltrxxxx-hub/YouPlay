@@ -43,8 +43,12 @@ ytmusic-browse-response > tp-yt-paper-spinner-lite, ytmusic-app-layout > tp-yt-p
 .yp-np-act.dislike.on { color: var(--yp-text) !important; background: color-mix(in srgb, var(--yp-text) 16%, transparent) !important; }
 .yp-np-act.pop { animation: yp-pop .45s var(--yp-spring); }
 @keyframes yp-pop { 40% { transform: scale(1.3); } }
-#yp-lyrics.full .yp-ly-meta { width: min(32vw, 54vh, 460px); }
-#yp-lyrics.full .yp-np-acts { position: absolute; right: 0; top: 0; margin: 0; }
+/* title / artist / source on the left, the two hearts in their own column on the right — never on top of the text */
+#yp-lyrics.full .yp-ly-meta { width: min(32vw, 54vh, 460px); display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: start; }
+#yp-lyrics.full .yp-ly-meta > :not(.yp-np-acts) { grid-column: 1; min-width: 0; }
+#yp-lyrics.full .yp-ly-meta > .yp-badge { justify-self: start; }
+#yp-lyrics.full .yp-ly-title { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#yp-lyrics.full .yp-np-acts { grid-column: 2; grid-row: 1 / span 3; margin: 0; align-self: start; flex: none; }
 
 /* sleep timer chip */
 .yp-np-extra { display: flex; justify-content: center; margin-top: 14px; }
