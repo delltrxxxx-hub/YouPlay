@@ -186,7 +186,8 @@ ytmusic-app:has(ytmusic-player-bar[player-fullscreened]) ~ #yp-root #yp-viz { di
 }
 .yp-sub-line.empty { padding: 6px 18px; }
 .yp-sub-line .w { animation: yp-word-in .55s var(--yp-ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
-.yp-sub-line.leave { animation: yp-line-out .38s ease forwards; }
+.yp-sub-line.leave { animation: yp-line-out .3s ease forwards; pointer-events: none; z-index: 0; }
+.yp-sub-cur > .yp-sub-line:not(.leave) { z-index: 1; }
 .yp-sub-next { margin-top: 8px; font-size: 15px; font-weight: 600; color: var(--yp-muted); text-shadow: 0 1px 8px rgba(0,0,0,.8); transition: opacity .3s; }
 .yp-sub-next:empty { opacity: 0; }
 @keyframes yp-word-in { from { opacity: 0; transform: translateY(14px) scale(.94); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }

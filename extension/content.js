@@ -82,6 +82,7 @@ function applyTheme() {
   root.dataset.ypTheme = S.theme;
   root.dataset.ypViz = S.visualizer;
   root.dataset.ypHideSide = S.hideSide ? '1' : '0';
+  root.dataset.ypCaption = ({ studio: '#120d0b', glass: '#0b0912', material: '#1d1b20', holo: '#1f1f1f', aero: '#3f7cbf', classic: '#030303' })[S.theme] || '#120d0b';
   root.style.setProperty('--yp-accent', S.accent);
   vizColors = null; // re-read on next frame
 }
@@ -108,6 +109,7 @@ function buildUI() {
   ui.fab = h('div', { id: 'yp-fab' },
     ui.btnLyrics = h('button', { class: 'yp-ic', title: 'Текст песни (Ctrl+L)', onclick: () => toggleLyrics() }, icon(I.lyrics)),
     ui.btnSubs = h('button', { class: 'yp-ic', title: 'Субтитры (Ctrl+J)', onclick: () => toggleSubs() }, icon(I.sub)),
+    ui.btnNow = h('button', { class: 'yp-ic', title: 'Сейчас играет — во весь экран (Ctrl+K)', onclick: () => openNowPlaying() }, icon(I.expand)),
     ui.btnSettings = h('button', { class: 'yp-ic yp-brand', title: 'YouPlay — оформление и настройки', onclick: () => openSettings() }, icon(I.spark)));
   ui.btnSubs.classList.toggle('on', !!S.subtitles);
 
@@ -289,7 +291,7 @@ function updateText(u) {
   switch (u.state) {
     case 'checking': return 'Проверяю обновления…';
     case 'none': return u.dev ? 'Режим разработки — обновления выключены' : 'У вас последняя версия ✓';
-    case 'available': return `Вышла версия ${u.version} — установится сама при следующем запуске`;
+    case 'available': return `Вышла версия ${u.version} — установится сама, когда вы закроете YouPlay`;
     case 'error': return 'Не удалось проверить обновления';
   }
   return '';
@@ -300,7 +302,7 @@ ipcRenderer.on('yp:update', (_e, u) => {
   if (ui.updStatus) ui.updStatus.textContent = updateText(u);
   if (!ui.toasts || u.state !== 'available' || updToastShown) return;
   updToastShown = true;
-  toast(h('div', { class: 'yp-tt' }, icon(I.update, 20), h('span', { text: `Вышел YouPlay ${u.version}. Он загружается в фоне и установится при следующем запуске.` })), { id: 'upd', timeout: 8000 });
+  toast(h('div', { class: 'yp-tt' }, icon(I.update, 20), h('span', { text: `Вышел YouPlay ${u.version}. Он скачивается в фоне и установится, когда вы закроете приложение.` })), { id: 'upd', timeout: 8000 });
 });
 
 // ═════════════════════════ 8. Player / track tracking ═════════════════════════
@@ -602,7 +604,7 @@ function tickLyrics() {
     const l = lines[i]; const end = lines[i + 1] ? lines[i + 1].t : l.t + 5;
     const p = clamp((t - l.t) / Math.max(0.3, Math.min(end - l.t, 12) * 0.92));
     if (lyricsOpen && l.el) fillWords(l.el, p);
-    if (S.subtitles && ui.subCur.firstChild) fillWords(ui.subCur.firstChild, p);
+    if (S.subtitles && ui.subCur.lastChild) fillWords(ui.subCur.lastChild, p);
   }
 }
 function setActiveLine(i, prev) {
@@ -635,8 +637,11 @@ function renderSubs(reset) {
   const txt = l ? l.text : '';
   const line = h('div', { class: 'yp-sub-line' + (txt ? '' : ' empty') }, ...(txt ? wordSpans(txt) : [h('span', { class: 'yp-note', text: i < 0 ? '' : '♪' })]));
   let wi = 0; for (const w of line.children) if (w._a !== undefined) w.style.setProperty('--i', wi++);
-  const old = ui.subCur.firstChild;
-  if (old) { old.classList.add('leave'); setTimeout(() => old.remove(), 380); }
+  for (const old of [...ui.subCur.children]) {
+    if (old.classList.contains('leave')) continue;
+    old.classList.add('leave');
+    setTimeout(() => old.remove(), 380);
+  }
   ui.subCur.append(line);
   const n = lines[i + 1]; ui.subNext.textContent = n ? n.text : '';
 }
@@ -685,6 +690,7 @@ function boot() {
     }, true);
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.code === 'KeyL') { e.preventDefault(); toggleLyrics(); }
+      else if (e.ctrlKey && e.code === 'KeyK') { e.preventDefault(); if (ui.lyrics.classList.contains('full')) toggleLyrics(false); else openNowPlaying(); }
       else if (e.ctrlKey && e.code === 'KeyJ') { e.preventDefault(); toggleSubs(); }
       else if (e.ctrlKey && e.code === 'Comma') { e.preventDefault(); openSettings(); }
       else if (e.key === 'Escape') { if (modal) closeSettings(); else if (ui.lyrics.classList.contains('full')) setFull(false); else if (lyricsOpen) toggleLyrics(false); }

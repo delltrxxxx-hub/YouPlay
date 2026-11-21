@@ -17,11 +17,27 @@ const mf = JSON.parse(readFileSync('extension/manifest.json', 'utf8'));
 mf.version = version;
 writeFileSync('extension/manifest.json', JSON.stringify(mf, null, 2) + '\n');
 
-// 3. launcher (C#, .NET Framework 4 — present on every Windows 10/11)
+// 3. app window (C#, .NET Framework 4.8 + WebView2 SDK from nuget.org)
 mkdirSync('out', { recursive: true });
+const WV2 = '1.0.4370.26';
+const wv2 = join('out', 'wv2-' + WV2);
+if (!existsSync(join(wv2, 'lib', 'net462', 'Microsoft.Web.WebView2.Core.dll'))) {
+  mkdirSync(wv2, { recursive: true });
+  const res = await fetch(`https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/${WV2}/microsoft.web.webview2.${WV2}.nupkg`);
+  if (!res.ok) throw new Error('nuget download failed: ' + res.status);
+  writeFileSync(join(wv2, 'pkg.zip'), Buffer.from(await res.arrayBuffer()));
+  execFileSync(join(process.env.WINDIR || 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', 'pkg.zip'], { cwd: wv2, stdio: 'inherit' });
+}
+mkdirSync('out/app', { recursive: true });
+for (const f of ['Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll'])
+  writeFileSync(join('out/app', f), readFileSync(join(wv2, 'lib', 'net462', f)));
+writeFileSync('out/app/WebView2Loader.dll', readFileSync(join(wv2, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll')));
 writeFileSync('out/Launcher.cs', readFileSync('launcher/Launcher.cs', 'utf8').replaceAll('__VERSION__', version));
 const csc = join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
-execFileSync(csc, ['/nologo', '/target:winexe', '/optimize+', '/win32icon:build\\icon.ico', '/r:System.Windows.Forms.dll', '/out:out\\YouPlay.exe', 'out\\Launcher.cs'], { stdio: 'inherit' });
+execFileSync(csc, ['/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/win32icon:build\\icon.ico',
+  '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Net.dll',
+  '/r:out\\app\\Microsoft.Web.WebView2.Core.dll', '/r:out\\app\\Microsoft.Web.WebView2.WinForms.dll',
+  '/out:out\\app\\YouPlay.exe', 'out\\Launcher.cs'], { stdio: 'inherit' });
 
 // 4. installer (NSIS from the electron-builder cache)
 function findMakensis() {
