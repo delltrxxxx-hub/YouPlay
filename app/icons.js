@@ -32,6 +32,7 @@ window.YP_ICONS = {
   user: { s: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6' },
   yt: { f: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-2 6.2 6 3.8-6 3.8z' },
   check: { s: 'M5 12.5l4.5 4.5L19 7.5' },
+  eq: { s: 'M6 4v6M6 14v6M12 4v2M12 10v10M18 4v9M18 17v3M4 12h4M10 8h4M16 15h4' },
 };
 window.ic = function (name, size) {
   const d = window.YP_ICONS[name]; if (!d) return '';

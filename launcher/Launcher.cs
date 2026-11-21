@@ -78,7 +78,7 @@ class MainWindow : Form
     public MainWindow()
     {
         Text = "YouPlay";
-        try { Icon = new Icon(Path.Combine(Program.Dir, "icon.ico")); } catch { }
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         BackColor = Color.FromArgb(18, 13, 11);
         MinimumSize = new Size(420, 560);
         StartPosition = FormStartPosition.Manual;

@@ -54,23 +54,30 @@ Section "Install"
   SetOutPath "$INSTDIR"
   File "..\out\app\YouPlay.exe"
   File "..\out\app\Microsoft.Web.WebView2.Core.dll"
-  File "..\out\app\Microsoft.Web.WebView2.WinForms.dll"
+  File "..\out\app\Microsoft.Web.WebView2.Wpf.dll"
   File "..\out\app\WebView2Loader.dll"
-  File "..\build\icon.ico"
-  SetOutPath "$INSTDIR\app"
-  File /r "..\app\*.*"
+  File "/oname=icon-${VERSION}.ico" "..\build\icon.ico"
   SetOutPath "$INSTDIR\engine"
   File /r "..\engine\*.*"
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall YouPlay.exe"
 
-  CreateShortcut "$DESKTOP\YouPlay.lnk" "$INSTDIR\YouPlay.exe" "" "$INSTDIR\icon.ico" 0 SW_SHOWNORMAL "" "YouPlay — YouTube Music"
-  CreateShortcut "$SMPROGRAMS\YouPlay.lnk" "$INSTDIR\YouPlay.exe" "" "$INSTDIR\icon.ico" 0 SW_SHOWNORMAL "" "YouPlay — YouTube Music"
+  ; fresh shortcuts pointing at an icon file with a new name every version,
+  ; so Windows cannot keep showing its cached old icon
+  Delete "$DESKTOP\YouPlay.lnk"
+  Delete "$SMPROGRAMS\YouPlay.lnk"
+  Delete "$SMPROGRAMS\YouPlay\*.lnk"
+  RMDir "$SMPROGRAMS\YouPlay"
+  CreateShortcut "$DESKTOP\YouPlay.lnk" "$INSTDIR\YouPlay.exe" "" "$INSTDIR\icon-${VERSION}.ico" 0 SW_SHOWNORMAL "" "YouPlay — YouTube Music"
+  CreateShortcut "$SMPROGRAMS\YouPlay.lnk" "$INSTDIR\YouPlay.exe" "" "$INSTDIR\icon-${VERSION}.ico" 0 SW_SHOWNORMAL "" "YouPlay — YouTube Music"
+  ; tell Explorer that icons changed and refresh its icon cache
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  nsExec::Exec '"$SYSDIR\ie4uinit.exe" -show'
 
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${APP}"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "${APP}"
-  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\icon.ico"
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\icon-${VERSION}.ico"
   WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall YouPlay.exe"'
   WriteRegStr HKCU "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall YouPlay.exe" /S'

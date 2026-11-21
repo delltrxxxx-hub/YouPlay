@@ -1,0 +1,203 @@
+using System;
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
+
+namespace YouPlay
+{
+    /// <summary>Colours, fonts and small native building blocks of the YouPlay interface.</summary>
+    static class Ui
+    {
+        public static Color BG = C(0x120D0B), SURF = C(0x1C1512), S2 = C(0x2A221E), S3 = C(0x3A302B), TEXT = C(0xF4EEEA), MUTED = C(0xA79B94), FAINT = C(0x6E625C);
+        public static Color YT = C(0xFF4E45), SC = C(0xFF7A1A), LOCAL = C(0x2BC48A);
+        public static Color Accent = C(0xFF5A36);
+        public static readonly FontFamily Font = new FontFamily("Segoe UI Variable Text, Segoe UI");
+        public static readonly FontFamily Display = new FontFamily("Segoe UI Variable Display, Segoe UI");
+        public static Color C(int rgb) { return Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb); }
+        public static Color A(Color c, byte a) { return Color.FromArgb(a, c.R, c.G, c.B); }
+        public static SolidColorBrush Br(Color c) { var b = new SolidColorBrush(c); return b; }
+        public static Color SrcColor(string src) { return src == "sc" ? SC : src == "local" ? LOCAL : YT; }
+
+        public static TextBlock Text(string s, double size, Color c, bool bold = false, bool display = false)
+        {
+            return new TextBlock { Text = s ?? "", FontSize = size, Foreground = Br(c), FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, FontFamily = display ? Display : Font, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
+        }
+        public static TextBlock Wrap(string s, double size, Color c, bool bold = false)
+        {
+            var t = Text(s, size, c, bold); t.TextWrapping = TextWrapping.Wrap; t.TextTrimming = TextTrimming.None; return t;
+        }
+
+        // ── icons: the YouPlay glyph set as vector paths ──
+        public static FrameworkElement Icon(string name, double size, Color c)
+        {
+            string[] d; var canvas = new Canvas { Width = 24, Height = 24 };
+            if (Icons.D.TryGetValue(name, out d))
+            {
+                Geometry g = null; try { g = Geometry.Parse(d[1]); } catch { }
+                var p = new Path { Data = g, SnapsToDevicePixels = false };
+                if (d[0] == "f") p.Fill = Br(c);
+                else { p.Stroke = Br(c); p.StrokeThickness = 2; p.StrokeStartLineCap = PenLineCap.Round; p.StrokeEndLineCap = PenLineCap.Round; p.StrokeLineJoin = PenLineJoin.Round; }
+                canvas.Children.Add(p);
+            }
+            return new Viewbox { Width = size, Height = size, Child = canvas, Tag = name, IsHitTestVisible = false };
+        }
+        public static void Recolor(FrameworkElement icon, Color c)
+        {
+            var vb = icon as Viewbox; if (vb == null) return;
+            var cv = vb.Child as Canvas; if (cv == null || cv.Children.Count == 0) return;
+            var p = (Path)cv.Children[0]; if (p.Fill != null) p.Fill = Br(c); if (p.Stroke != null) p.Stroke = Br(c);
+        }
+
+        // ── clickable surfaces with a soft hover / press animation ──
+        public static T Click<T>(T el, Action onClick, Color hover) where T : Border
+        {
+            var baseBg = el.Background as SolidColorBrush;
+            Color from = baseBg != null ? baseBg.Color : Colors.Transparent;
+            var bg = new SolidColorBrush(from); el.Background = bg;
+            el.Cursor = Cursors.Hand;
+            el.MouseEnter += (s, e) => bg.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(hover, TimeSpan.FromMilliseconds(140)));
+            el.MouseLeave += (s, e) => { bg.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(from, TimeSpan.FromMilliseconds(200))); Press(el, 1); };
+            el.MouseLeftButtonDown += (s, e) => { Press(el, 0.96); e.Handled = true; };
+            el.MouseLeftButtonUp += (s, e) => { Press(el, 1); if (onClick != null) onClick(); e.Handled = true; };
+            return el;
+        }
+        static void Press(FrameworkElement el, double to)
+        {
+            var st = el.RenderTransform as ScaleTransform;
+            if (st == null) { st = new ScaleTransform(1, 1); el.RenderTransform = st; el.RenderTransformOrigin = new Point(0.5, 0.5); }
+            var a = new DoubleAnimation(to, TimeSpan.FromMilliseconds(to < 1 ? 70 : 160)) { EasingFunction = new QuadraticEase() };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, a); st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+        }
+        /// <summary>Round icon button.</summary>
+        public static Border IconButton(string icon, double box, double iconSize, Color iconColor, Color bg, Action onClick, string tip = null)
+        {
+            var b = new Border { Width = box, Height = box, CornerRadius = new CornerRadius(box / 2), Background = Br(bg), Child = Icon(icon, iconSize, iconColor), ToolTip = tip };
+            var hover = bg.A == 0 ? A(Colors.White, 0x1A) : Lighten(bg, 0.12);
+            return Click(b, onClick, hover);
+        }
+        public static FrameworkElement IconOf(Border b) { return b.Child as FrameworkElement; }
+        public static void SetIcon(Border b, string icon, Color c) { var size = ((FrameworkElement)b.Child).Width; b.Child = Icon(icon, size, c); }
+        public static Color Lighten(Color c, double k) { return Color.FromArgb(c.A, (byte)(c.R + (255 - c.R) * k), (byte)(c.G + (255 - c.G) * k), (byte)(c.B + (255 - c.B) * k)); }
+        public static Color Darken(Color c, double k) { return Color.FromArgb(c.A, (byte)(c.R * (1 - k)), (byte)(c.G * (1 - k)), (byte)(c.B * (1 - k))); }
+
+        public static Border Pill(string label, bool filled, Action onClick, string icon = null)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            Color fg = filled ? C(0x111111) : TEXT;
+            if (icon != null) { var ic = Icon(icon, 17, fg); ic.Margin = new Thickness(0, 0, label == null ? 0 : 8, 0); sp.Children.Add(ic); }
+            if (label != null) sp.Children.Add(Text(label, 13.5, fg, true));
+            var b = new Border { Height = 40, Padding = new Thickness(label == null ? 11 : 18, 0, label == null ? 11 : 18, 0), CornerRadius = new CornerRadius(20), Background = Br(filled ? TEXT : S2), Child = sp };
+            return Click(b, onClick, filled ? C(0xFFFFFF) : S3);
+        }
+        public static Border Chip(string label, bool on, Action onClick)
+        {
+            var b = new Border { Height = 32, Padding = new Thickness(14, 0, 14, 0), CornerRadius = new CornerRadius(16), Background = Br(on ? TEXT : S2), Margin = new Thickness(0, 0, 8, 0), Child = Text(label, 12.5, on ? C(0x111111) : MUTED, true) };
+            ((TextBlock)b.Child).VerticalAlignment = VerticalAlignment.Center;
+            return Click(b, onClick, on ? TEXT : S3);
+        }
+        public static Border Badge(string src, string kind = null)
+        {
+            var c = SrcColor(src);
+            string label = src == "sc" ? "SoundCloud" : src == "local" ? "Файл" : kind == "video" ? "Клип" : "YouTube";
+            return new Border { CornerRadius = new CornerRadius(5), Background = Br(A(c, 0x30)), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center, Child = Text(label, 10.5, c, true) };
+        }
+
+        // ── images ──
+        static readonly Dictionary<string, BitmapImage> cache = new Dictionary<string, BitmapImage>();
+        public static Border Cover(string url, double w, double h, double radius, string fallbackIcon = "music")
+        {
+            var b = new Border { Width = w, Height = h, CornerRadius = new CornerRadius(radius), Background = Br(S2), ClipToBounds = true };
+            Load(b, url, (int)Math.Max(w, h), fallbackIcon);
+            return b;
+        }
+        public static void Load(Border b, string url, int px, string fallbackIcon = "music")
+        {
+            if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) { b.Background = Br(S2); if (fallbackIcon != null) b.Child = new Border { Child = Icon(fallbackIcon, Math.Max(16, b.Width * 0.38), FAINT), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; return; }
+            b.Child = null;
+            BitmapImage img;
+            if (!cache.TryGetValue(url, out img))
+            {
+                try
+                {
+                    img = new BitmapImage();
+                    img.BeginInit(); img.UriSource = new Uri(url); img.DecodePixelWidth = Math.Min(900, (int)(px * 1.6)); img.CacheOption = BitmapCacheOption.OnLoad; img.CreateOptions = BitmapCreateOptions.IgnoreColorProfile; img.EndInit();
+                    if (cache.Count > 600) cache.Clear();
+                    cache[url] = img;
+                }
+                catch { return; }
+            }
+            var brush = new ImageBrush(img) { Stretch = Stretch.UniformToFill };
+            b.Background = brush;
+            if (img.IsDownloading)
+            {
+                b.Background = Br(S2);
+                img.DownloadCompleted += (s, e) => { b.Background = brush; b.Opacity = 0; b.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220))); };
+            }
+        }
+
+        // ── smooth scrolling ──
+        public static ScrollViewer Scroll(UIElement content, bool horizontal = false)
+        {
+            var sv = new ScrollViewer { Content = content, VerticalScrollBarVisibility = horizontal ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = horizontal ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled, Focusable = false, PanningMode = horizontal ? PanningMode.HorizontalOnly : PanningMode.VerticalOnly };
+            double target = 0; bool running = false;
+            EventHandler step = null;
+            step = (s, e) =>
+            {
+                double cur = horizontal ? sv.HorizontalOffset : sv.VerticalOffset;
+                double next = cur + (target - cur) * 0.22;
+                if (Math.Abs(target - next) < 0.6) { next = target; CompositionTarget.Rendering -= step; running = false; }
+                if (horizontal) sv.ScrollToHorizontalOffset(next); else sv.ScrollToVerticalOffset(next);
+            };
+            sv.PreviewMouseWheel += (s, e) =>
+            {
+                double max = horizontal ? sv.ScrollableWidth : sv.ScrollableHeight;
+                if (max <= 0) return;
+                double cur = horizontal ? sv.HorizontalOffset : sv.VerticalOffset;
+                if (!running) target = cur;
+                double nt = Math.Max(0, Math.Min(max, target - e.Delta * 1.1));
+                if (horizontal && (nt == target)) return;   // let the page scroll when a card row is at its end
+                target = nt; e.Handled = true;
+                if (!running) { running = true; CompositionTarget.Rendering += step; }
+            };
+            sv.ScrollChanged += (s, e) => { if (!running) target = horizontal ? sv.HorizontalOffset : sv.VerticalOffset; };
+            return sv;
+        }
+
+        public static string Fmt(double s) { if (!(s > 0)) s = 0; int t = (int)Math.Floor(s); return (t / 60) + ":" + (t % 60).ToString("00"); }
+        public static void Fade(UIElement el, double to, int ms, Action done = null)
+        {
+            var a = new DoubleAnimation(to, TimeSpan.FromMilliseconds(ms)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            if (done != null) a.Completed += (s, e) => done();
+            el.BeginAnimation(UIElement.OpacityProperty, a);
+        }
+    }
+
+    /// <summary>A thin progress / seek bar: track, fill and a knob that appears on hover.</summary>
+    class SeekBar : Grid
+    {
+        readonly Border fill, knob; readonly ScaleTransform scale = new ScaleTransform(0, 1);
+        public event Action<double> Seeked; public bool Dragging; double value;
+        public SeekBar(double height, Color track, Color fg)
+        {
+            Height = 18; Background = Brushes.Transparent; Cursor = Cursors.Hand;
+            var tr = new Border { Height = height, CornerRadius = new CornerRadius(height / 2), Background = Ui.Br(track), VerticalAlignment = VerticalAlignment.Center };
+            fill = new Border { Height = height, CornerRadius = new CornerRadius(height / 2), Background = Ui.Br(fg), VerticalAlignment = VerticalAlignment.Center, RenderTransform = scale, RenderTransformOrigin = new Point(0, 0.5) };
+            knob = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(6.5), Background = Ui.Br(Colors.White), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Opacity = 0, IsHitTestVisible = false };
+            Children.Add(tr); Children.Add(fill); Children.Add(knob);
+            MouseEnter += (s, e) => Ui.Fade(knob, 1, 120);
+            MouseLeave += (s, e) => { if (!Dragging) Ui.Fade(knob, 0, 200); };
+            MouseLeftButtonDown += (s, e) => { Dragging = true; CaptureMouse(); Show(At(e)); e.Handled = true; };
+            MouseMove += (s, e) => { if (Dragging) Show(At(e)); };
+            MouseLeftButtonUp += (s, e) => { if (!Dragging) return; Dragging = false; ReleaseMouseCapture(); var v = At(e); Show(v); if (Seeked != null) Seeked(v); };
+            SizeChanged += (s, e) => Show(value);
+        }
+        double At(MouseEventArgs e) { return ActualWidth > 0 ? Math.Max(0, Math.Min(1, e.GetPosition(this).X / ActualWidth)) : 0; }
+        void Show(double v) { value = v; scale.ScaleX = v; knob.Margin = new Thickness(Math.Max(0, v * ActualWidth - 6.5), 0, 0, 0); }
+        public void Set(double v) { if (!Dragging) Show(double.IsNaN(v) ? 0 : Math.Max(0, Math.Min(1, v))); }
+    }
+}

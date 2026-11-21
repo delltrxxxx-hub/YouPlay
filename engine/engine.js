@@ -48,7 +48,7 @@
     const v = /watch\?v=/.test(href) ? new URL(href, location.origin).searchParams.get('v') : null;
     return {
       src: 'yt', kind: v ? 'song' : /channel\//.test(href) ? 'artist' : 'playlist', videoId: v, browse: v ? null : href,
-      title: text(n.querySelector('.title')), artist: text(n.querySelector('.subtitle, .details .subtitle')),
+      title: text(n.querySelector('.title')), artist: text(n.querySelector('.subtitle, .details .subtitle')).replace(/^\s*(композиция|песня|трек|song|track|видео|video|клип|сингл|single|ep|альбом|album|плейлист|playlist)\s*[•·]\s*/i, ''),
       art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : (v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ''),
       round: !!n.querySelector('.image-wrapper[aria-label], ytmusic-thumbnail-renderer[thumbnail-crop="MUSIC_THUMBNAIL_CROP_CIRCLE"]') || /channel\//.test(href),
     };
@@ -285,6 +285,7 @@
     return { ok: true };
   }
   // lyrics from YouTube Music itself (tab "Текст" of the playing track)
+  let lastLyr = { id: '', text: '' };
   async function lyrics(c) {
     if (c.videoId && nowId() !== c.videoId) return { text: '' };
     const page = $('ytmusic-player-page'); if (!page) return { text: '' };
@@ -294,7 +295,10 @@
     tab.click();
     const shelf = await waitFor(() => { const d = $('ytmusic-player-page ytmusic-description-shelf-renderer'); return d && text(d.querySelector('.description, yt-formatted-string.description')) ? d : null; }, 6000);
     const desc = shelf ? shelf.querySelector('.description, yt-formatted-string.description') : null;
-    const out = desc ? desc.innerText.trim() : '';
+    let out = desc ? desc.innerText.trim() : '';
+    // the tab can still show the previous song's lyrics for a moment
+    if (out && lastLyr.text === out && lastLyr.id !== c.videoId) { await wait(2500); const d2 = $('ytmusic-player-page ytmusic-description-shelf-renderer .description'); out = d2 ? d2.innerText.trim() : ''; if (out === lastLyr.text) out = ''; }
+    if (out) lastLyr = { id: c.videoId, text: out };
     const src = shelf ? text(shelf.querySelector('.footer, .non-expandable-description')) : '';
     if (tabs[0]) tabs[0].click();
     return { text: out, source: src };

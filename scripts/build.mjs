@@ -13,7 +13,7 @@ console.log('YouPlay', version);
 execFileSync(process.execPath, ['scripts/make-icon.mjs'], { stdio: 'inherit' });
 
 // 2. syntax check of the app and engine scripts
-for (const f of ['app/app.js', 'app/icons.js', 'engine/engine.js', 'engine/shield.js', 'engine/sc-bridge.js', 'engine/sc-main.js', 'engine/sc-page.js'])
+for (const f of ['engine/eq.js', 'engine/engine.js', 'engine/shield.js', 'engine/sc-bridge.js', 'engine/sc-main.js', 'engine/sc-page.js'])
   execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' });
 
 // 3. app window (C#, .NET Framework 4.8 + WebView2 SDK from nuget.org)
@@ -31,12 +31,22 @@ mkdirSync('out/app', { recursive: true });
 for (const f of ['Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll'])
   writeFileSync(join('out/app', f), readFileSync(join(wv2, 'lib', 'net462', f)));
 writeFileSync('out/app/WebView2Loader.dll', readFileSync(join(wv2, 'runtimes', 'win-x64', 'native', 'WebView2Loader.dll')));
-writeFileSync('out/Launcher.cs', readFileSync('launcher/Launcher.cs', 'utf8').replaceAll('__VERSION__', version));
-const csc = join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
-execFileSync(csc, ['/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/win32icon:build\\icon.ico',
-  '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Net.dll', '/r:System.Web.Extensions.dll',
-  '/r:out\\app\\Microsoft.Web.WebView2.Core.dll', '/r:out\\app\\Microsoft.Web.WebView2.WinForms.dll',
-  '/out:out\\app\\YouPlay.exe', 'out\\Launcher.cs'], { stdio: 'inherit' });
+writeFileSync('out/app/Microsoft.Web.WebView2.Wpf.dll', readFileSync(join(wv2, 'lib', 'net462', 'Microsoft.Web.WebView2.Wpf.dll')));
+// native icons: the YouPlay glyph set compiled into the app as vector paths
+globalThis.window = {}; globalThis.document = { addEventListener() {} };
+new Function(readFileSync('app/icons.js', 'utf8'))();
+mkdirSync('out/desktop', { recursive: true });
+const icons = Object.entries(window.YP_ICONS).map(([n, d]) => '            { ' + JSON.stringify(n) + ', new[] { ' + JSON.stringify(d.f ? 'f' : 's') + ', ' + JSON.stringify(d.f || d.s) + ' } },').join(String.fromCharCode(10));
+const NL = String.fromCharCode(10), BS = String.fromCharCode(92);
+writeFileSync('out/desktop/Icons.g.cs', ['namespace YouPlay {', '    static class Icons {', '        public static readonly System.Collections.Generic.Dictionary<string, string[]> D = new System.Collections.Generic.Dictionary<string, string[]> {', icons, '        };', '    }', '}', ''].join(NL));
+const srcs = [['out', 'desktop', 'Icons.g.cs'].join(BS)];
+for (const f of readdirSync('desktop')) if (f.endsWith('.cs')) { writeFileSync(join('out/desktop', f), readFileSync(join('desktop', f), 'utf8').replaceAll('__VERSION__', version)); srcs.push(['out', 'desktop', f].join(BS)); }
+const fw = join(process.env.WINDIR || 'C:/Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319');
+const csc = join(fw, 'csc.exe');
+execFileSync(csc, ['/nologo', '/preferreduilang:en-US', '/target:winexe', '/optimize+', '/platform:x64', '/win32icon:' + ['build', 'icon.ico'].join(BS), '/lib:' + join(fw, 'WPF'),
+  '/r:PresentationFramework.dll', '/r:PresentationCore.dll', '/r:WindowsBase.dll', '/r:System.Xaml.dll', '/r:System.Windows.Forms.dll', '/r:System.Net.dll', '/r:System.Web.Extensions.dll', '/r:System.Core.dll',
+  '/r:' + ['out', 'app', 'Microsoft.Web.WebView2.Core.dll'].join(BS), '/r:' + ['out', 'app', 'Microsoft.Web.WebView2.Wpf.dll'].join(BS),
+  '/out:' + ['out', 'app', 'YouPlay.exe'].join(BS), ...srcs], { stdio: 'inherit' });
 
 // 4. installer (NSIS from the electron-builder cache)
 function findMakensis() {

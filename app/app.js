@@ -121,6 +121,8 @@
   const view = $('#view');
   const srcBadge = (it) => it.src === 'sc' ? '<span class="badge sc">SoundCloud</span>' : it.src === 'local' ? '<span class="badge local">Файл</span>' : `<span class="badge yt">${it.kind === 'video' ? 'Клип' : 'YouTube'}</span>`;
   const key = (it) => it.src === 'sc' ? 'sc:' + it.url : it.src === 'local' ? 'local:' + it.id : 'yt:' + it.videoId;
+  const KIND_RE = /^\s*(композиция|песня|трек|song|track|видео|video|клип|сингл|single|ep|альбом|album|плейлист|playlist)\s*[•·]\s*/i;
+  const artistOf = (s) => (s || '').replace(KIND_RE, '');
   const isDisliked = (it) => S.disliked.some((d) => d.key === key(it));
   function rowHTML(it, i, opts = {}) {
     const on = P.cur && key(P.cur) === key(it);
@@ -128,7 +130,7 @@
     return `<div class="row${on ? ' on' : ''}" data-i="${i}">
       <span class="r-n">${on ? '<i class="eq"><b></b><b></b><b></b></i>' : (opts.n === false ? '' : i + 1)}</span>
       <span class="r-cv">${it.art ? `<img loading="lazy" src="${esc(it.art)}" alt="">` : ''}</span>
-      <span class="r-m"><span class="r-t">${esc(it.title)}</span><span class="r-s">${srcBadge(it)}<span>${esc(it.artist || '')}</span></span></span>
+      <span class="r-m"><span class="r-t">${esc(it.title)}</span><span class="r-s">${srcBadge(it)}<span>${esc(artistOf(it.artist))}</span></span></span>
       <span class="r-date">${opts.date ? esc(opts.date(it)) : ''}</span>
       <span class="r-acts">${it.src === 'sc' ? `<button class="ib${liked ? ' on' : ''}" data-act="sclike" title="Лайк в SoundCloud">${IC(liked ? 'heart' : 'heartLine', 18)}</button>` : ''}<button class="ib" data-act="menu" title="Ещё: в очередь, в плейлист…">${IC('dots', 18)}</button></span>
       <span class="r-d">${it.duration ? fmt(it.duration) : esc(it.durText || '')}</span></div>`;
@@ -145,7 +147,7 @@
     };
   }
   function cardHTML(it, i) {
-    return `<div class="card${it.round ? ' round' : ''}" data-i="${i}"><div class="cv">${it.art ? `<img loading="lazy" src="${esc(it.art)}" alt="">` : ''}<span class="pb">${IC('play', 20)}</span></div><b>${esc(it.title)}</b><small>${esc(it.artist || '')}</small></div>`;
+    return `<div class="card${it.round ? ' round' : ''}" data-i="${i}"><div class="cv">${it.art ? `<img loading="lazy" src="${esc(it.art)}" alt="">` : ''}<span class="pb">${IC('play', 20)}</span></div><b>${esc(it.title)}</b><small>${esc(artistOf(it.artist))}</small></div>`;
   }
   const loading = (n = 6) => Array.from({ length: n }, () => '<div class="skel"></div>').join('');
 
@@ -579,7 +581,7 @@
     document.body.classList.add('has-track');
     $('#player').hidden = false;
     $('#pl-title').textContent = $('#np-title').textContent = it.title || '';
-    $('#pl-artist').textContent = $('#np-artist').textContent = it.artist || '';
+    $('#pl-artist').textContent = $('#np-artist').textContent = artistOf(it.artist);
     for (const img of [$('#pl-art'), $('#np-art')]) img.src = it.art || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
     $('#np-bg').style.backgroundImage = it.art ? `url("${it.art}")` : '';
     const a = bgFlip ? $('#bg-a') : $('#bg-b'), b = bgFlip ? $('#bg-b') : $('#bg-a'); bgFlip = !bgFlip;
@@ -763,7 +765,7 @@
     paintOffset();
     if (!online || !it.title) { $('#ly-list').innerHTML = `<div class="ly-msg">${online ? 'Текст не найден' : 'Текст недоступен без интернета'}</div>`; return; }
     lyNet = false;
-    const tempo = TEMPO.test(it.title), a = (it.artist || '').split(/•|·|,| и | & | feat\.| ft\.| x /i)[0].replace(/\s*-\s*topic$/i, '').replace(/vevo$/i, '').trim();
+    const tempo = TEMPO.test(it.title), a = artistOf(it.artist).split(/•|·|,| и | & | feat\.| ft\.| x /i)[0].replace(/\s*-\s*topic$/i, '').replace(/vevo$/i, '').trim();
     let t = clean(it.title);
     if (a && t.toLowerCase().startsWith(a.toLowerCase())) t = t.slice(a.length).replace(/^\s*[—–-]\s*/, '') || t;   // "Artist — Title" (common on SoundCloud)
     let res = null;
@@ -812,7 +814,7 @@
       $('#ly-list').style.transform = 'translate3d(0,-30vh,0)';
     } else $('#ly-list').innerHTML = `<div class="ly-msg">${res && res.instrumental ? '♪ Инструментал' : lyNet ? 'Не удалось связаться с сервером текстов (LRCLIB). <button class="chip" id="ly-retry">Повторить</button>' : 'Текст для этой песни не найден'}</div>`;
     if ($('#ly-retry')) $('#ly-retry').onclick = () => loadLyrics(it);
-    if ($('#ly-src')) $('#ly-src').textContent = res && res.ytm ? 'Текст: YouTube Music' : 'Текст: LRCLIB';
+    if ($('#ly-src')) $('#ly-src').textContent = res && res.syncedLyrics ? 'Текст: LRCLIB · по словам' : res && res.plainLyrics ? 'Синхронный текст не найден — показан обычный (' + (res.ytm ? 'YouTube Music' : 'LRCLIB') + ')' : '';
   }
   const ratio = () => { const d = P.dur; if (!lyMeta.dur || !d) return 1; const k = lyMeta.dur / d; return k < .55 || k > 1.8 ? 1 : (lyMeta.tempo || Math.abs(k - 1) > .04 ? k : 1); };
   const offset = () => (P.cur && S.offsets[key(P.cur)]) || 0;

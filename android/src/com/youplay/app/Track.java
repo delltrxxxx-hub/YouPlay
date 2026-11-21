@@ -21,7 +21,7 @@ final class Track {
         t.src = o.optString("src", defSrc);
         t.kind = o.optString("kind", "song");
         t.videoId = s(o, "videoId"); t.url = s(o, "url"); t.id = s(o, "id");
-        t.title = o.optString("title", ""); t.artist = o.optString("artist", ""); t.art = o.optString("art", "");
+        t.title = o.optString("title", ""); t.artist = o.optString("artist", "").replaceFirst("(?iu)^\\s*(композиция|песня|трек|song|track|видео|video|клип|сингл|single|ep|альбом|album|плейлист|playlist)\\s*[•·]\\s*", ""); t.art = o.optString("art", "");
         t.durText = o.optString("durText", ""); t.browse = s(o, "browse"); t.likedAt = s(o, "likedAt");
         t.duration = o.optDouble("duration", 0); if (Double.isNaN(t.duration)) t.duration = 0;
         if (t.duration > 100000) t.duration /= 1000;
