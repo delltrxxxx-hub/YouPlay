@@ -11,6 +11,7 @@ console.log('YouPlay', version);
 
 // 1. icons
 execFileSync(process.execPath, ['scripts/make-icon.mjs'], { stdio: 'inherit' });
+execFileSync(process.execPath, ['scripts/make-icons-css.mjs'], { stdio: 'inherit' });
 
 // 2. extension version
 const mf = JSON.parse(readFileSync('extension/manifest.json', 'utf8'));
