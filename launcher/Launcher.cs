@@ -237,6 +237,14 @@ class MainWindow : Form
         if (op == "search") url = "https://soundcloud.com/search/sounds?q=" + Uri.EscapeDataString(arg) + "&yp=" + id + "#yp=search:" + id;
         else if (op == "likes") url = "https://soundcloud.com/you/likes?yp=" + id + "#yp=likes:" + id;
         else if (op == "status") url = "https://soundcloud.com/you/library?yp=" + id + "#yp=status:" + id;
+        else if (op == "sets") url = "https://soundcloud.com/you/sets?yp=" + id + "#yp=sets:" + id;
+        else if (op == "set" && IsSoundCloud(arg) && arg.StartsWith("https://")) url = arg.Split('#')[0] + (arg.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=set:" + id;
+        else if ((op == "addto" || op == "create") && IsSoundCloud(arg) && arg.StartsWith("https://"))
+        {
+            int k = arg.IndexOf("#name=");
+            string name = k >= 0 ? arg.Substring(k + 6) : "", track = k >= 0 ? arg.Substring(0, k) : arg;
+            url = track + (track.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=" + op + ":" + id + ":" + name;
+        }
         else if ((op == "like" || op == "unlike") && IsSoundCloud(arg) && arg.StartsWith("https://")) url = arg.Split('#')[0] + (arg.Contains("?") ? "&" : "?") + "yp=" + id + "#yp=" + op + ":" + id;
         else { PostUi(new Dictionary<string, object> { { "t", "scdata" }, { "data", new Dictionary<string, object> { { "id", id }, { "error", "bad" } } } }); ScNext(); return; }
         scBusy = id; scTimer.Stop(); scTimer.Start();

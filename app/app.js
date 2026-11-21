@@ -44,7 +44,7 @@
   let engineReady = false;
 
   // ───────── settings (stored inside the app, kept across updates) ─────────
-  const DEF = { theme: 'studio', accent: '#ff5a36', audioOnly: true, adblock: true, autoNP: true, volume: 1, offsets: {}, disliked: [], ytLikeDates: {}, recent: [] };
+  const DEF = { playlists: [], theme: 'studio', accent: '#ff5a36', audioOnly: true, adblock: true, autoNP: true, volume: 1, offsets: {}, disliked: [], ytLikeDates: {}, recent: [] };
   const S = Object.assign({}, DEF, JSON.parse(localStorage.getItem('youplay') || '{}'), { account: null, sc: null });
   const save = () => { const { account, sc, ...keep } = S; localStorage.setItem('youplay', JSON.stringify(keep)); };
   function applyTheme() {
@@ -69,11 +69,11 @@
   const NAV = [
     { id: 'home', label: 'Главная', icon: 'home' },
     { id: 'search', label: 'Поиск', icon: 'search', mobileOnly: true },
-    { id: 'likes', label: 'Любимое', icon: 'heart' },
-    { id: 'local', label: 'Моя музыка', icon: ANDROID ? 'phone' : 'music' },
+    { id: 'lib', label: 'Библиотека', icon: 'library' },
     { id: 'settings', label: 'Настройки', icon: 'gear', mobileOnly: true },
   ];
   let route = { name: 'home' };
+  const LIB = ['lib', 'likes', 'local', 'pl', 'scset'];
   const history = [];
   function go(name, params, push = true) {
     if (name === 'settings') { openSettings(); return; }
@@ -91,14 +91,14 @@
     return false;
   }
   function paintNav() {
-    $('#nav').innerHTML = NAV.filter((n) => !n.mobileOnly).map((n) => `<button class="nav-i${route.name === n.id ? ' on' : ''}" data-go="${n.id}"><span class="ic">${IC(n.icon)}</span>${n.label}</button>`).join('');
-    $('#tabs').innerHTML = NAV.map((n) => `<button class="tab${(route.name === n.id) ? ' on' : ''}" data-go="${n.id}"><span class="ic">${IC(n.icon)}</span>${n.label === 'Моя музыка' ? 'Файлы' : n.label}</button>`).join('');
+    const cur = LIB.includes(route.name) ? 'lib' : route.name;
+    $('#nav').innerHTML = NAV.filter((n) => !n.mobileOnly).map((n) => `<button class="nav-i${cur === n.id ? ' on' : ''}" data-go="${n.id}"><span class="ic">${IC(n.icon)}</span>${n.label}</button>`).join('');
+    $('#tabs').innerHTML = NAV.map((n) => `<button class="tab${(cur === n.id) ? ' on' : ''}" data-go="${n.id}"><span class="ic">${IC(n.icon)}</span>${n.label}</button>`).join('');
     $('#side-foot').innerHTML = `<button class="nav-i" data-go="settings"><span class="ic">${IC('gear')}</span>Настройки</button>`;
   }
   document.addEventListener('click', (e) => {
     const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); return; }
   });
-  $('#top-set').onclick = () => openSettings();
   $('#topbar .logo').onclick = () => go('home');
 
   // ───────── search ─────────
@@ -118,14 +118,15 @@
       <span class="r-cv">${it.art ? `<img loading="lazy" src="${esc(it.art)}" alt="">` : ''}</span>
       <span class="r-m"><span class="r-t">${esc(it.title)}</span><span class="r-s">${srcBadge(it)}<span>${esc(it.artist || '')}</span></span></span>
       <span class="r-date">${opts.date ? esc(opts.date(it)) : ''}</span>
-      <span class="r-acts">${it.src === 'sc' ? `<button class="ib${liked ? ' on' : ''}" data-act="sclike" title="Лайк в SoundCloud">${IC(liked ? 'heart' : 'heartLine', 18)}</button>` : ''}<button class="ib" data-act="queue" title="Добавить в очередь">${IC('plus', 18)}</button></span>
+      <span class="r-acts">${it.src === 'sc' ? `<button class="ib${liked ? ' on' : ''}" data-act="sclike" title="Лайк в SoundCloud">${IC(liked ? 'heart' : 'heartLine', 18)}</button>` : ''}<button class="ib" data-act="menu" title="Ещё: в очередь, в плейлист…">${IC('dots', 18)}</button></span>
       <span class="r-d">${it.duration ? fmt(it.duration) : esc(it.durText || '')}</span></div>`;
   }
-  function bindRows(root, list, name) {
+  function bindRows(root, list, name, ctx) {
     root.onclick = async (e) => {
       const row = e.target.closest('.row'); if (!row) return;
       const it = list[+row.dataset.i];
       const act = e.target.closest('[data-act]');
+      if (act && act.dataset.act === 'menu') { trackMenu(it, ctx || {}); return; }
       if (act && act.dataset.act === 'queue') { P.addNext(it); toast('Будет играть следующим: ' + it.title); return; }
       if (act && act.dataset.act === 'sclike') { likeSc(it, act); return; }
       P.playList(list, +row.dataset.i, name);
@@ -137,7 +138,7 @@
   const loading = (n = 6) => Array.from({ length: n }, () => '<div class="skel"></div>').join('');
 
   // ───────── views ─────────
-  let homeData = null;
+  let homeData = (() => { try { const h = JSON.parse(localStorage.getItem('youplay-home') || 'null'); return h && h.sections && h.sections.length ? h : null; } catch (_) { return null; } })(), homeFresh = false;
   async function render() {
     document.body.classList.toggle('searching', route.name === 'search' && document.body.classList.contains('searching'));
     const r = route.name;
@@ -146,17 +147,23 @@
     if (r === 'likes') return renderLikes();
     if (r === 'local') return renderLocal();
     if (r === 'browse') return renderBrowse();
+    if (r === 'lib') return renderLib();
+    if (r === 'pl') return renderPl();
+    if (r === 'scset') return renderScSet();
   }
   async function renderHome() {
     const hello = new Date().getHours();
     const greet = hello < 6 ? 'Доброй ночи' : hello < 12 ? 'Доброе утро' : hello < 18 ? 'Добрый день' : 'Добрый вечер';
     view.innerHTML = `<div class="page-h fadein"><small>${greet}</small><h1>Главная</h1></div><div id="home-body">${online ? loading(8) : ''}</div>`;
     if (!online) { $('#home-body').innerHTML = `<div class="banner green"><span class="ic">${IC('music')}</span><div><b>Без интернета работает «Моя музыка»</b><small>Музыка с этого устройства играет без сети</small></div><button class="btn" data-go="local">Открыть</button></div>`; return; }
-    if (!homeData) { const d = await eng('home'); if (route.name !== 'home') return; homeData = d.sections ? d : null; }
+    if (!homeData || !homeFresh) {
+      const refresh = eng('home').then((d) => { if (d.sections && d.sections.length) { homeData = d; homeFresh = true; try { localStorage.setItem('youplay-home', JSON.stringify(d)); } catch (_) {} } });
+      if (!homeData) { await refresh; if (route.name !== 'home') return; } else refresh.then(() => { if (route.name === 'home' && !$('#modal').querySelector('.sheet') && view.scrollTop < 40) renderHome(); });
+    }
     const body = $('#home-body'); if (!body) return;
     if (!homeData || !homeData.sections.length) { body.innerHTML = `<div class="note">YouTube Music загружается…</div>`; setTimeout(() => { if (route.name === 'home' && !homeData) render(); }, 3000); return; }
     const recentHTML = S.recent.length ? `<section class="sec fadein"><div class="sec-h"><h2>Недавно играло</h2></div><div class="cards" id="sec-recent">${S.recent.slice(0, 16).map(cardHTML).join('')}</div></section>` : '';
-    body.innerHTML = recentHTML + homeData.sections.map((s, si) => `<section class="sec fadein"><div class="sec-h"><h2>${esc(s.title || 'Для вас')}</h2></div>${s.layout === 'cards' ? `<div class="cards" data-s="${si}">${s.items.map(cardHTML).join('')}</div>` : `<div class="rows" data-s="${si}">${s.items.slice(0, 8).map((it, i) => rowHTML(it, i, { n: false })).join('')}</div>`}</section>`).join('');
+    body.innerHTML = recentHTML + homeData.sections.map((s, si) => `<section class="sec fadein"><div class="sec-h"><h2>${esc(s.title || 'Для вас')}</h2></div>${s.layout === 'cards' ? `<div class="cards" data-s="${si}">${s.items.map(cardHTML).join('')}</div>` : `<div class="rows non" data-s="${si}">${s.items.slice(0, 8).map((it, i) => rowHTML(it, i, { n: false })).join('')}</div>`}</section>`).join('');
     if (S.recent.length) bindCards($('#sec-recent'), S.recent, 'Недавно играло');
     for (const el of $$('[data-s]', body)) { const s = homeData.sections[+el.dataset.s]; if (s.layout === 'cards') bindCards(el, s.items, s.title); else bindRows(el, s.items, s.title); }
   }
@@ -257,6 +264,184 @@
     await loadLikes(refresh);
     paint(false);
   }
+  // ───────── Библиотека: Любимое, Моя музыка, плейлисты YouPlay, YouTube Music и SoundCloud ─────────
+  const pls = { yt: null, sc: null, at: 0, busy: null };
+  function loadRemotePls(force) {
+    if (!online) return Promise.resolve();
+    if (pls.busy) return pls.busy;
+    if (!force && pls.at && Date.now() - pls.at < 5 * 60e3) return Promise.resolve();
+    pls.busy = Promise.all([eng('playlists'), ask({ t: 'sc', op: 'sets', arg: '' }, 45000)]).then(([y, c]) => {
+      pls.yt = y && y.items ? y : { login: y && y.login, items: [] };
+      pls.sc = c && c.items ? c : { login: c && c.login, items: [] };
+      pls.at = Date.now();
+    }).finally(() => { pls.busy = null; });
+    return pls.busy;
+  }
+  const plArt = (p) => (p.items.find((x) => x.art) || {}).art || '';
+  const slim = (x) => ({ src: x.src, kind: x.kind, videoId: x.videoId, url: x.url, id: x.id, title: x.title, artist: x.artist, art: x.art, duration: x.duration, durText: x.durText });
+  let libFilter = 'all';
+  async function renderLib(force) {
+    const paint = (busy) => {
+      if (route.name !== 'lib') return;
+      const tiles = [];
+      if (libFilter === 'all' || libFilter === 'yp') {
+        tiles.push({ kind: 'likes', title: 'Любимое', sub: 'Лайки YouTube Music и SoundCloud', cls: 'likes', icon: 'heart' });
+        tiles.push({ kind: 'local', title: 'Моя музыка', sub: 'Файлы · работает без интернета', cls: 'local', icon: ANDROID ? 'phone' : 'music' });
+        for (const p of S.playlists) tiles.push({ kind: 'pl', id: p.id, title: p.name, sub: 'YouPlay · ' + p.items.length + ' тр.', art: plArt(p), icon: 'library' });
+      }
+      if ((libFilter === 'all' || libFilter === 'yt') && pls.yt) for (const p of pls.yt.items) tiles.push({ kind: 'yt', href: p.browse, title: p.title, sub: p.sub || 'YouTube Music', art: p.art, src: 'yt' });
+      if ((libFilter === 'all' || libFilter === 'sc') && pls.sc) for (const p of pls.sc.items) tiles.push({ kind: 'sc', url: p.url, title: p.title, sub: p.count + ' тр.', art: p.art, src: 'sc' });
+      const ytOut = pls.yt && pls.yt.login === false, scOut = pls.sc && pls.sc.login === false;
+      view.innerHTML = `<div class="page-h fadein"><small>Всё в одном месте</small><h1>Библиотека</h1></div>
+        <div class="tabs-row" id="lib-f">${[['all', 'Всё'], ['yp', 'YouPlay'], ['yt', 'YouTube Music'], ['sc', 'SoundCloud']].map(([id, l]) => `<button class="chip${libFilter === id ? ' on' : ''}" data-f="${id}">${l}</button>`).join('')}<button class="chip ghost" id="lib-ref" title="Обновить">${IC('update', 16)}</button></div>
+        <div class="grid" id="lib-grid"><div class="tile new" data-k="new"><div class="cv">${IC('plus', 40)}</div><b>Новый плейлист</b><small>YouPlay, YouTube Music или SoundCloud</small></div>
+        ${tiles.map((t, i) => `<div class="tile" data-t="${i}"><div class="cv ${t.cls || ''}">${t.art ? `<img loading="lazy" src="${esc(t.art)}" alt="">` : IC(t.icon || 'library', 44)}${t.src ? `<span class="badge ${t.src}">${t.src === 'yt' ? 'YouTube' : 'SoundCloud'}</span>` : ''}</div><b>${esc(t.title)}</b><small>${esc(t.sub)}</small></div>`).join('')}
+        ${busy ? '<div class="tile"><div class="cv skel"></div></div><div class="tile"><div class="cv skel"></div></div>' : ''}</div>
+        ${(ytOut && libFilter !== 'sc' && libFilter !== 'yp') || (scOut && libFilter !== 'yt' && libFilter !== 'yp') ? `<div class="banner"><span class="ic">${IC('user')}</span><div><b>Подключите аккаунты</b><small>${[ytOut ? 'YouTube Music' : '', scOut ? 'SoundCloud' : ''].filter(Boolean).join(' и ')} — тогда здесь появятся ваши плейлисты оттуда</small></div><button class="btn" id="lib-acc">Открыть настройки</button></div>` : ''}`;
+      $$('#lib-f [data-f]').forEach((b) => b.onclick = () => { libFilter = b.dataset.f; paint(!pls.at); });
+      $('#lib-ref').onclick = () => renderLib(true);
+      if ($('#lib-acc')) $('#lib-acc').onclick = () => openSettings();
+      $('#lib-grid').onclick = (e) => {
+        if (e.target.closest('[data-k=new]')) { createPlaylist(); return; }
+        const el = e.target.closest('[data-t]'); if (!el) return; const t = tiles[+el.dataset.t];
+        if (t.kind === 'likes') go('likes'); else if (t.kind === 'local') go('local'); else if (t.kind === 'pl') go('pl', { id: t.id });
+        else if (t.kind === 'yt') go('browse', { href: t.href, title: t.title, art: t.art, from: 'yt' }); else if (t.kind === 'sc') go('scset', { url: t.url, title: t.title, art: t.art });
+      };
+    };
+    paint(!pls.at || force);
+    await loadRemotePls(force);
+    paint(false);
+  }
+  function renderPl() {
+    const p = S.playlists.find((x) => x.id === route.id); if (!p) { go('lib', null, false); return; }
+    const list = p.items.filter((x) => !isDisliked(x));
+    const n = { yt: 0, sc: 0, local: 0 }; for (const x of p.items) n[x.src] = (n[x.src] || 0) + 1;
+    view.innerHTML = `<div class="hero fadein"><div class="cv">${plArt(p) ? `<img src="${esc(plArt(p))}">` : IC('library', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист YouPlay</small><h1>${esc(p.name)}</h1><p>${p.items.length} тр. ${n.yt ? '· <span class="badge yt">YouTube</span> ' + n.yt : ''} ${n.sc ? '· <span class="badge sc">SoundCloud</span> ' + n.sc : ''} ${n.local ? '· <span class="badge local">Файлы</span> ' + n.local : ''}</p></div>
+      <div class="hero-btns"><button class="btn" id="p-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="p-shuf">${IC('shuffle', 18)}Перемешать</button><button class="btn ghost" id="p-ren">Переименовать</button><button class="btn ghost" id="p-del">Удалить</button></div></div></div>
+      <div class="rows" id="p-list">${list.length ? list.map((it, i) => rowHTML(it, i)).join('') : '<div class="note">Пока пусто. Нажмите ⋯ у любого трека → «Добавить в плейлист».</div>'}</div>`;
+    bindRows($('#p-list'), list, p.name, { pl: p });
+    $('#p-play').onclick = () => list.length && P.playList(list, 0, p.name);
+    $('#p-shuf').onclick = () => list.length && P.playList(shuffled(list), 0, p.name);
+    $('#p-ren').onclick = () => askText('Название плейлиста', p.name, (v) => { p.name = v; save(); renderPl(); });
+    $('#p-del').onclick = () => confirmBox('Удалить плейлист «' + p.name + '»?', 'Треки останутся в YouTube Music и SoundCloud, удалится только этот список.', 'Удалить', () => { S.playlists = S.playlists.filter((x) => x !== p); save(); go('lib', null, false); toast('Плейлист удалён'); });
+  }
+  async function renderScSet() {
+    view.innerHTML = `<div class="hero fadein"><div class="cv">${route.art ? `<img src="${esc(route.art)}">` : IC('cloud', 60)}</div><div class="hero-t"><div class="page-h" style="margin:0"><small>Плейлист SoundCloud</small><h1>${esc(route.title || '')}</h1><p id="ss-n">Загружаю…</p></div><div class="hero-btns"><button class="btn" id="ss-play">${IC('play', 18)}Слушать</button><button class="btn ghost" id="ss-shuf">${IC('shuffle', 18)}Перемешать</button></div></div></div><div class="rows" id="ss-list">${loading(8)}</div>`;
+    const url = route.url;
+    const d = await ask({ t: 'sc', op: 'set', arg: url }, 45000);
+    if (route.name !== 'scset' || route.url !== url) return;
+    const list = (d.items || []).map((t) => ({ ...t, src: 'sc' })).filter((x) => !isDisliked(x));
+    $('#ss-n').textContent = list.length + ' тр.';
+    $('#ss-list').innerHTML = list.length ? list.map((it, i) => rowHTML(it, i)).join('') : '<div class="note">Не удалось открыть плейлист SoundCloud</div>';
+    bindRows($('#ss-list'), list, route.title);
+    $('#ss-play').onclick = () => list.length && P.playList(list, 0, route.title);
+    $('#ss-shuf').onclick = () => list.length && P.playList(shuffled(list), 0, route.title);
+  }
+
+  // small dialogs
+  function askText(title, value, done) {
+    openModal(`<div class="sheet-h"><h2>${esc(title)}</h2><button class="ib" data-close>${IC('close')}</button></div><input class="field" id="ask-in" maxlength="120" value="${esc(value || '')}"><div class="sheet-f"><span></span><button class="btn" id="ask-ok">Сохранить</button></div>`, 'small');
+    const inp = $('#ask-in'); setTimeout(() => { inp.focus(); inp.select(); }, 60);
+    const ok = () => { const v = inp.value.trim(); if (!v) return; closeModal(); done(v); };
+    $('#ask-ok').onclick = ok; inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
+    $('#modal [data-close]').onclick = closeModal;
+  }
+  function confirmBox(title, text, yes, done) {
+    openModal(`<div class="sheet-h"><h2>${esc(title)}</h2></div><p class="muted">${esc(text)}</p><div class="sheet-f"><button class="btn ghost" id="cf-no">Отмена</button><button class="btn danger" id="cf-yes">${esc(yes)}</button></div>`, 'small');
+    $('#cf-no').onclick = closeModal; $('#cf-yes').onclick = () => { closeModal(); done(); };
+  }
+
+  // ⋯ menu of a track
+  function trackMenu(it, ctx) {
+    const scl = it.src === 'sc' && scLiked(it.url);
+    openModal(`<div class="menu-h"><span class="r-cv">${it.art ? `<img src="${esc(it.art)}" alt="">` : ''}</span><div><b>${esc(it.title)}</b><small>${srcBadge(it)} ${esc(it.artist || '')}</small></div></div>
+      <div class="menu">
+        <button data-m="now">${IC('play', 20)}Играть сейчас</button>
+        <button data-m="next">${IC('queue', 20)}Играть следующим</button>
+        <button data-m="pl">${IC('plus', 20)}Добавить в плейлист…</button>
+        ${ctx.pl ? `<button data-m="rm">${IC('close', 20)}Убрать из «${esc(ctx.pl.name)}»</button>` : ''}
+        ${it.src === 'sc' ? `<button data-m="sclike">${IC(scl ? 'heart' : 'heartLine', 20)}${scl ? 'Убрать лайк в SoundCloud' : 'Лайк в SoundCloud'}</button>` : ''}
+        <button data-m="dis">${IC('broken', 20)}Не предлагать этот трек</button>
+      </div>`, 'menu-sheet');
+    $('#modal .menu').onclick = (e) => {
+      const b = e.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m;
+      if (m === 'pl') { addToPlaylist(it); return; }
+      closeModal();
+      if (m === 'now') P.playList([it], 0, it.title);
+      if (m === 'next') { P.addNext(it); toast('Будет играть следующим: ' + it.title); }
+      if (m === 'rm') { ctx.pl.items = ctx.pl.items.filter((x) => key(x) !== key(it)); save(); if (route.name === 'pl') renderPl(); toast('Убрано из плейлиста'); }
+      if (m === 'sclike') likeSc(it);
+      if (m === 'dis') dislike(it);
+    };
+  }
+
+  // add a track to a playlist: YouPlay (any track), YouTube Music (YouTube tracks), SoundCloud (SoundCloud tracks)
+  async function addToPlaylist(it) {
+    openModal(`<div class="sheet-h"><h2>В плейлист</h2><button class="ib" data-close>${IC('close')}</button></div>
+      <p class="muted" style="margin:0 0 12px">«${esc(it.title)}» — ${it.src === 'yt' ? 'плейлисты YouPlay и YouTube Music' : it.src === 'sc' ? 'плейлисты YouPlay и SoundCloud' : 'плейлисты YouPlay'}</p>
+      <div class="pick" id="pick"></div>`, 'small');
+    $('#modal [data-close]').onclick = closeModal;
+    const draw = (busy) => {
+      const box = $('#pick'); if (!box) return;
+      const yt = it.src === 'yt' && pls.yt ? pls.yt.items : [], sc = it.src === 'sc' && pls.sc ? pls.sc.items.filter((p) => p.mine !== false) : [];
+      const has = (p) => p.items.some((x) => key(x) === key(it));
+      box.innerHTML = `<button class="pk new" data-new="1"><span class="pc">${IC('plus', 22)}</span><span><b>Новый плейлист</b><small>Создать и добавить трек</small></span></button>
+        ${S.playlists.map((p, i) => `<button class="pk" data-yp="${i}"><span class="pc">${plArt(p) ? `<img src="${esc(plArt(p))}">` : IC('library', 22)}</span><span><b>${esc(p.name)}</b><small>YouPlay · ${p.items.length} тр.</small></span>${has(p) ? `<span class="ok">${IC('check', 18)}</span>` : ''}</button>`).join('')}
+        ${yt.map((p, i) => `<button class="pk" data-yt="${i}"><span class="pc">${p.art ? `<img src="${esc(p.art)}">` : IC('yt', 22)}</span><span><b>${esc(p.title)}</b><small><span class="badge yt">YouTube Music</span></small></span></button>`).join('')}
+        ${sc.map((p, i) => `<button class="pk" data-sc="${i}"><span class="pc">${p.art ? `<img src="${esc(p.art)}">` : IC('cloud', 22)}</span><span><b>${esc(p.title)}</b><small><span class="badge sc">SoundCloud</span> ${p.count} тр.</small></span></button>`).join('')}
+        ${busy ? '<div class="note">Загружаю плейлисты из аккаунтов…</div>' : ''}`;
+      box.onclick = async (e) => {
+        const b = e.target.closest('.pk'); if (!b) return;
+        if (b.dataset.new) { createPlaylist(it); return; }
+        if (b.dataset.yp != null) { const p = S.playlists[+b.dataset.yp]; if (!has(p)) { p.items.push(slim(it)); save(); toast('Добавлено в «' + p.name + '»'); } else toast('Уже есть в «' + p.name + '»'); closeModal(); if (route.name === 'lib') renderLib(); return; }
+        closeModal();
+        if (b.dataset.yt != null) { const p = yt[+b.dataset.yt]; toast('Добавляю в YouTube Music…'); const r = await eng('plAdd', { videoId: it.videoId, title: it.title, artist: it.artist, playlist: p.title }); toast(r.ok ? '✓ Добавлено в «' + p.title + '» (YouTube Music)' : r.login === false ? 'Войдите в YouTube Music в настройках' : 'YouTube Music не принял трек — попробуйте ещё раз'); }
+        if (b.dataset.sc != null) { const p = sc[+b.dataset.sc]; toast('Добавляю в SoundCloud…'); const r = await ask({ t: 'sc', op: 'addto', arg: it.url + '#name=' + encodeURIComponent(p.title) }, 45000); toast(r.ok ? '✓ Добавлено в «' + p.title + '» (SoundCloud)' : r.login === false ? 'Войдите в SoundCloud в настройках' : 'SoundCloud не принял трек — попробуйте ещё раз'); }
+      };
+    };
+    draw(it.src !== 'local' && !pls.at);
+    if (it.src !== 'local') { await loadRemotePls(false); draw(false); }
+  }
+
+  // new playlist: in YouPlay (any tracks), YouTube Music or SoundCloud
+  function createPlaylist(it) {
+    const ytOk = !!(S.account && S.account.signedIn) && (!it || it.src === 'yt');
+    const scOk = !!(S.sc && S.sc.login) && !!it && it.src === 'sc';
+    const why = { yt: !(S.account && S.account.signedIn) ? 'Войдите в YouTube Music в настройках' : 'Сюда можно только треки YouTube Music', sc: !(S.sc && S.sc.login) ? 'Подключите SoundCloud в настройках' : !it ? 'SoundCloud создаёт плейлист вместе с первым треком — нажмите ⋯ у трека SoundCloud' : 'Сюда можно только треки SoundCloud' };
+    openModal(`<div class="sheet-h"><h2>Новый плейлист</h2><button class="ib" data-close>${IC('close')}</button></div>
+      <input class="field" id="pl-name-in" maxlength="120" placeholder="Название плейлиста">
+      <div class="where" id="where">
+        <button class="wh on" data-w="yp"><span class="pc">${IC('library', 22)}</span><span><b>YouPlay</b><small>Любые треки вместе: YouTube Music, SoundCloud и файлы</small></span></button>
+        <button class="wh" data-w="yt" ${ytOk ? '' : 'disabled'}><span class="pc yt">${IC('yt', 22)}</span><span><b>YouTube Music</b><small>${ytOk ? 'Сохранится в вашем аккаунте YouTube Music' : why.yt}</small></span></button>
+        <button class="wh" data-w="sc" ${scOk ? '' : 'disabled'}><span class="pc sc">${IC('cloud', 22)}</span><span><b>SoundCloud</b><small>${scOk ? 'Сохранится в вашем аккаунте SoundCloud' : why.sc}</small></span></button>
+      </div>
+      <div class="sheet-f"><span>${it ? 'Трек «' + esc(it.title) + '» сразу попадёт в плейлист' : ''}</span><button class="btn" id="pl-create">Создать</button></div>`, 'small');
+    let where = 'yp';
+    $('#modal [data-close]').onclick = closeModal;
+    $('#where').onclick = (e) => { const b = e.target.closest('.wh'); if (!b || b.disabled) return; where = b.dataset.w; $$('#where .wh').forEach((x) => x.classList.toggle('on', x === b)); };
+    const inp = $('#pl-name-in'); setTimeout(() => inp.focus(), 60);
+    const make = async () => {
+      const name = inp.value.trim(); if (!name) { inp.focus(); return; }
+      closeModal();
+      if (where === 'yp') {
+        const p = { id: 'p' + Date.now().toString(36), name, items: it ? [slim(it)] : [], at: Date.now() };
+        S.playlists.unshift(p); save(); toast('Плейлист «' + name + '» создан');
+        if (route.name === 'lib') renderLib(); else if (!it) go('pl', { id: p.id });
+      } else if (where === 'yt') {
+        toast('Создаю плейлист в YouTube Music…');
+        const r = await eng('plCreate', it ? { name, videoId: it.videoId, title: it.title, artist: it.artist } : { name });
+        pls.at = 0; toast(r.ok ? '✓ Плейлист «' + name + '» создан в YouTube Music' : 'YouTube Music не создал плейлист — попробуйте ещё раз');
+        if (route.name === 'lib') renderLib(true);
+      } else {
+        toast('Создаю плейлист в SoundCloud…');
+        const r = await ask({ t: 'sc', op: 'create', arg: it.url + '#name=' + encodeURIComponent(name) }, 45000);
+        pls.at = 0; toast(r.ok ? '✓ Плейлист «' + name + '» создан в SoundCloud' : 'SoundCloud не создал плейлист — попробуйте ещё раз');
+        if (route.name === 'lib') renderLib(true);
+      }
+    };
+    $('#pl-create').onclick = make; inp.onkeydown = (e) => { if (e.key === 'Enter') make(); };
+  }
+
   // Моя музыка: files on this device, no internet needed
   let localCache = null;
   async function localTracks(force) {
@@ -410,9 +595,11 @@
     for (const b of [$('#pl-like'), $('#np-like')]) { b.classList.toggle('on', l); b.innerHTML = IC(l ? 'heart' : 'heartLine', b.id === 'np-like' ? 24 : 20); }
     $('#np-dislike').classList.toggle('on', !!(P.cur && (P.cur.disliked || isDisliked(P.cur))));
   }
+  let lastTick = performance.now();
   function frame() {
-    if (P.cur) {
-      if (P.cur.src === 'sc' && P.playing) P.time += 1 / 60;   // smooth between widget updates
+    const now = performance.now(), dt = (now - lastTick) / 1000; lastTick = now;
+    if (P.cur && !document.hidden) {
+      if (P.cur.src === 'sc' && P.playing) P.time += Math.min(dt, 1);   // between widget updates
       if (P.cur.src === 'yt' && P.playing && P.yt.time != null) P.time = Math.max(P.time, P.yt.time);
       const d = P.dur || 0, p = d ? clamp(P.time / d) : 0;
       for (const s of [$('#pl-seek'), $('#np-seek')]) { if (s.dataset.drag) continue; s.querySelector('.fill').style.transform = `scaleX(${p})`; s.querySelector('.knob').style.left = (p * 100) + '%'; }
@@ -423,9 +610,8 @@
       if ($('#np').classList.contains('open')) tickLyrics();
       sleepTick();
     }
-    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  setInterval(frame, 250);
   function bindSeek(el) {
     el.addEventListener('pointerdown', (e) => {
       if (!P.dur) return;
@@ -453,6 +639,8 @@
   $('#pl-queue').onclick = () => { openNP(); setSheet('queue'); };
   $('#pl-like').onclick = () => like(); $('#np-like').onclick = () => like();
   $('#np-dislike').onclick = () => dislike();
+  $('#np-add').onclick = () => P.cur && addToPlaylist(P.cur);
+  if ($('#pl-add')) $('#pl-add').onclick = () => P.cur && addToPlaylist(P.cur);
 
   // ───────── Now Playing ─────────
   function openNP() { if (!P.cur) return; $('#np').classList.add('open'); $('#np').setAttribute('aria-hidden', 'false'); lastLine = -2; }
@@ -530,12 +718,13 @@
     if (btn) btn.innerHTML = IC(liked ? 'heartLine' : 'heart', 18), btn.classList.toggle('on', !liked);
     paintLikes(); toast(liked ? 'Убрано из лайков SoundCloud' : '♥ Сохранено в SoundCloud');
   }
-  function dislike() {
-    const it = P.cur; if (!it) return;
+  function dislike(track) {
+    const it = track || P.cur; if (!it) return;
+    if (track && P.cur && key(track) === key(P.cur)) return dislike();
     const k = key(it);
     if (isDisliked(it)) { S.disliked = S.disliked.filter((d) => d.key !== k); save(); paintLikes(); toast('Снова можно предлагать'); return; }
     S.disliked.unshift({ key: k, src: it.src, title: it.title, artist: it.artist, art: it.art, at: Date.now() }); save();
-    if (it.src === 'yt' && !it.disliked) host.send({ t: 'eng', cmd: 'control', op: 'dislike', id: rid() });
+    if (!track && it.src === 'yt' && !it.disliked) host.send({ t: 'eng', cmd: 'control', op: 'dislike', id: rid() });
     toast('Больше не предложу: ' + it.title, { label: 'Отменить', fn: () => { S.disliked = S.disliked.filter((d) => d.key !== k); save(); renderQueue(); } });
     renderQueue(); P.next();
   }
@@ -544,14 +733,24 @@
   let lines = [], lastLine = -2, lyMeta = { dur: 0, tempo: false }, lyReq = 0;
   const TEMPO = /(slowed|sped|speed up|nightcore|daycore)/i;
   const clean = (t) => t.replace(/\s*[\(\[][^\)\]]*(slowed|sped|reverb|nightcore|official|video|audio|lyric|mv|remaster|hd|hq|клип)[^\)\]]*[\)\]]/gi, '').replace(/\s*-\s*(official|lyric).*$/i, '').trim();
-  async function lrc(path) { const r = await ask({ t: 'fetch', url: 'https://lrclib.net' + path }, 20000); if (!r || r.status !== 200) return null; try { return JSON.parse(r.body); } catch (_) { return null; } }
+  let lyNet = false;
+  async function lrc(path) {
+    for (let a = 0; a < 2; a++) {
+      const r = await ask({ t: 'fetch', url: 'https://lrclib.net' + path }, 15000).catch(() => null);
+      if (r && r.status === 200) { try { return JSON.parse(r.body); } catch (_) { return null; } }
+      if (r && r.status === 404) return null;
+      lyNet = true;
+    }
+    return null;
+  }
   async function loadLyrics(it) {
     const my = ++lyReq; lines = []; lastLine = -2;
     $('#ly-list').innerHTML = `<div class="ly-msg"><span class="dots"><i></i><i></i><i></i></span>Ищу текст…</div>`;
     $('#ly-list').style.transform = '';
     paintOffset();
     if (!online || !it.title) { $('#ly-list').innerHTML = `<div class="ly-msg">${online ? 'Текст не найден' : 'Текст недоступен без интернета'}</div>`; return; }
-    const tempo = TEMPO.test(it.title), a = (it.artist || '').split(/,| и | & | feat\.| ft\.| x /i)[0].trim();
+    lyNet = false;
+    const tempo = TEMPO.test(it.title), a = (it.artist || '').split(/•|·|,| и | & | feat\.| ft\.| x /i)[0].replace(/\s*-\s*topic$/i, '').replace(/vevo$/i, '').trim();
     let t = clean(it.title);
     if (a && t.toLowerCase().startsWith(a.toLowerCase())) t = t.slice(a.length).replace(/^\s*[—–-]\s*/, '') || t;   // "Artist — Title" (common on SoundCloud)
     let res = null;
@@ -562,6 +761,16 @@
       if (Array.isArray(list) && list.length) { const n = {}; for (const x of list) if (x.syncedLyrics && x.duration) n[Math.round(x.duration)] = (n[Math.round(x.duration)] || 0) + 1; const common = +(Object.entries(n).sort((p, q) => q[1] - p[1])[0] || [0])[0]; list.sort((p, q) => ((q.syncedLyrics ? 1000 : 0) - Math.abs((q.duration || 0) - common)) - ((p.syncedLyrics ? 1000 : 0) - Math.abs((p.duration || 0) - common))); res = list[0]; }
     }
     if (my !== lyReq) return;
+    if ((!res || (!res.syncedLyrics && !res.plainLyrics)) && it.src === 'yt' && it.videoId) {
+      // YouTube Music's own lyrics (tab "Текст"), read from the hidden window
+      for (let k = 0; k < 3 && my === lyReq; k++) {
+        await new Promise((r) => setTimeout(r, 1500 + k * 1500));
+        if (my !== lyReq || !P.cur || P.cur.videoId !== it.videoId) return;
+        const y = await eng('lyrics', { videoId: it.videoId }).catch(() => null);
+        if (y && y.text) { res = { plainLyrics: y.text, ytm: y.source || 'YouTube Music' }; break; }
+      }
+      if (my !== lyReq) return;
+    }
     lyMeta = { dur: (res && res.duration) || 0, tempo };
     if (res && res.syncedLyrics) {
       for (const raw of res.syncedLyrics.split(/\r?\n/)) { const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)]; const txt = raw.replace(/\[[^\]]*\]/g, '').trim(); for (const m of tags) lines.push({ t: +m[1] * 60 + +m[2], text: txt }); }
@@ -570,7 +779,9 @@
     } else if (res && res.plainLyrics) {
       $('#ly-list').innerHTML = res.plainLyrics.split(/\r?\n/).map((l) => `<p class="ly-line plain">${esc(l) || '&nbsp;'}</p>`).join('');
       $('#ly-list').style.transform = 'translate3d(0,-30vh,0)';
-    } else $('#ly-list').innerHTML = `<div class="ly-msg">${res && res.instrumental ? '♪ Инструментал' : 'Текст для этой песни не найден'}</div>`;
+    } else $('#ly-list').innerHTML = `<div class="ly-msg">${res && res.instrumental ? '♪ Инструментал' : lyNet ? 'Не удалось связаться с сервером текстов (LRCLIB). <button class="chip" id="ly-retry">Повторить</button>' : 'Текст для этой песни не найден'}</div>`;
+    if ($('#ly-retry')) $('#ly-retry').onclick = () => loadLyrics(it);
+    if ($('#ly-src')) $('#ly-src').textContent = res && res.ytm ? 'Текст: YouTube Music' : 'Текст: LRCLIB';
   }
   const ratio = () => { const d = P.dur; if (!lyMeta.dur || !d) return 1; const k = lyMeta.dur / d; return k < .55 || k > 1.8 ? 1 : (lyMeta.tempo || Math.abs(k - 1) > .04 ? k : 1); };
   const offset = () => (P.cur && S.offsets[key(P.cur)]) || 0;

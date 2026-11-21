@@ -74,10 +74,10 @@
   async function settle(match, timeout = 9000) {
     const t0 = Date.now(); let last = -1, stable = 0;
     while (Date.now() - t0 < timeout) {
-      await wait(250);
+      await wait(200);
       if (!match()) continue;
       const n = $('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer', pageRoot()).length;
-      if (n > 0 && n === last) { if (++stable >= 6) return true; } else stable = 0;
+      if (n > 0 && n === last) { if (++stable >= 3) return true; } else stable = 0;
       last = n;
     }
     return false;
@@ -127,7 +127,7 @@
     const ok = await settle(() => /VLLM|list=LM/.test(location.href), 12000);
     if (!ok && $('a.sign-in-link, ytmusic-nav-bar a[href*="ServiceLogin"]')) return { login: false, tracks: [] };
     let n = -1, stable = 0;
-    for (let i = 0; i < 80 && stable < 4; i++) {   // scrolling loads the rest
+    for (let i = 0; i < 60 && stable < 3; i++) {   // scrolling loads the rest
       window.scrollTo(0, document.documentElement.scrollHeight);
       await wait(600);
       const c = $$('ytmusic-playlist-shelf-renderer ytmusic-responsive-list-item-renderer').length;
@@ -205,6 +205,101 @@
     if (mp && v) window.__ypMutedByAd = mp.classList.contains('ad-showing');
   }, 700);
 
+  // ── playlists: YouTube Music's own menus, opened inside this hidden window ──
+  const vis = (el) => !!el && el.offsetParent !== null;
+  async function waitFor(fn, ms = 6000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const r = fn(); if (r) return r; await wait(150); } return null; }
+  const esc = () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true })); const bd = $('tp-yt-iron-overlay-backdrop.opened'); if (bd) bd.click(); };
+  const nowId = () => { try { const p = $('#movie_player'); return (p && p.getVideoData && p.getVideoData().video_id) || ''; } catch (e) { return ''; } };
+  const signedIn = () => account().signedIn;
+  async function playlists() {
+    if (!signedIn()) return { login: false, items: [] };
+    nav({ browseEndpoint: { browseId: 'FEmusic_liked_playlists' } });
+    await settle(() => /FEmusic_liked_playlists|library\/playlists/.test(location.href), 9000);
+    const items = [], seen = new Set();
+    for (const s of sections(pageRoot())) for (const it of s.items) {
+      const m = it.browse && (/list=([\w-]+)/.exec(it.browse) || /browse\/VL([\w-]+)/.exec(it.browse));
+      if (!m || seen.has(m[1]) || m[1] === 'LM' || m[1] === 'SE') continue;
+      seen.add(m[1]); items.push({ id: m[1], title: it.title, sub: it.artist, art: it.art, browse: it.browse });
+    }
+    return { login: true, items };
+  }
+  async function openMenu(videoId, title, artist) {
+    let btn = null;
+    if (nowId() === videoId) btn = $('ytmusic-player-bar ytmusic-menu-renderer #button-shape button, ytmusic-player-bar ytmusic-menu-renderer button');
+    if (!btn) {
+      nav({ searchEndpoint: { query: (title + ' ' + (artist || '')).trim() } });
+      await settle(() => location.pathname === '/search', 8000);
+      const row = $$('ytmusic-responsive-list-item-renderer', pageRoot()).find((r) => r.querySelector('a[href*="v=' + videoId + '"]'));
+      if (!row) return false;
+      row.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      btn = row.querySelector('ytmusic-menu-renderer #button-shape button, ytmusic-menu-renderer button');
+    }
+    if (!btn) return false;
+    btn.click();
+    return !!(await waitFor(() => $$('ytmusic-menu-popup-renderer').find(vis), 4000));
+  }
+  async function saveDialog(videoId, title, artist) {
+    if (!(await openMenu(videoId, title, artist))) return null;
+    const pop = $$('ytmusic-menu-popup-renderer').find(vis);
+    const item = $$('ytmusic-menu-navigation-item-renderer, ytmusic-menu-service-item-renderer', pop).find((i) => /плейлист|playlist/i.test(text(i)) && !/удал|remove/i.test(text(i)));
+    if (!item) { esc(); return null; }
+    (item.querySelector('a, tp-yt-paper-item') || item).click();
+    return waitFor(() => $$('ytmusic-add-to-playlist-renderer').find(vis), 8000);
+  }
+  async function plAdd(c) {
+    if (!signedIn()) return { ok: false, login: false };
+    const d = await saveDialog(c.videoId, c.title, c.artist);
+    if (!d) return { ok: false };
+    const want = (c.playlist || '').trim().toLowerCase();
+    const opt = await waitFor(() => $$('ytmusic-playlist-add-to-option-renderer', d).find((o) => text(o.querySelector('#title, .title, yt-formatted-string')).toLowerCase() === want), 5000);
+    if (!opt) { esc(); return { ok: false, error: 'not-found' }; }
+    (opt.querySelector('button, tp-yt-paper-item, #title') || opt).click();
+    await wait(900); esc();
+    return { ok: true };
+  }
+  async function plCreate(c) {
+    if (!signedIn()) return { ok: false, login: false };
+    if (c.videoId) {
+      const d = await saveDialog(c.videoId, c.title, c.artist);
+      if (!d) return { ok: false };
+      const nb = $$('button, yt-button-renderer', d).find((b) => /новый плейлист|new playlist|создать плейлист/i.test(text(b)));
+      if (!nb) { esc(); return { ok: false }; }
+      ((nb.querySelector && nb.querySelector('button')) || nb).click();
+    } else {
+      nav({ browseEndpoint: { browseId: 'FEmusic_liked_playlists' } });
+      await settle(() => /FEmusic_liked_playlists|library\/playlists/.test(location.href), 9000);
+      const nb = $$('button, ytmusic-two-row-item-renderer, a', pageRoot()).find((b) => /^(новый плейлист|new playlist)$/i.test(text(b)));
+      if (!nb) return { ok: false };
+      nb.click();
+    }
+    const form = await waitFor(() => $$('ytmusic-playlist-form').find(vis), 6000);
+    if (!form) { esc(); return { ok: false }; }
+    const input = form.querySelector('input, textarea');
+    if (!input) { esc(); return { ok: false }; }
+    input.focus(); input.value = c.name; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+    await wait(300);
+    const create = $$('button', form).find((b) => /создать|create|сохранить|save/i.test(text(b)) && !b.disabled);
+    if (!create) { esc(); return { ok: false }; }
+    create.click();
+    await wait(1500); esc();
+    return { ok: true };
+  }
+  // lyrics from YouTube Music itself (tab "Текст" of the playing track)
+  async function lyrics(c) {
+    if (c.videoId && nowId() !== c.videoId) return { text: '' };
+    const page = $('ytmusic-player-page'); if (!page) return { text: '' };
+    const tabs = $$('tp-yt-paper-tab', page);
+    const tab = tabs.find((t) => /текст|lyrics/i.test(text(t)));
+    if (!tab || tab.hasAttribute('disabled') || tab.getAttribute('aria-disabled') === 'true') return { text: '' };
+    tab.click();
+    const shelf = await waitFor(() => { const d = $('ytmusic-player-page ytmusic-description-shelf-renderer'); return d && text(d.querySelector('.description, yt-formatted-string.description')) ? d : null; }, 6000);
+    const desc = shelf ? shelf.querySelector('.description, yt-formatted-string.description') : null;
+    const out = desc ? desc.innerText.trim() : '';
+    const src = shelf ? text(shelf.querySelector('.footer, .non-expandable-description')) : '';
+    if (tabs[0]) tabs[0].click();
+    return { text: out, source: src };
+  }
+
   // ── commands from the app ──
   window.__ypEng = async function (cmd) {
     const reply = (data) => send({ t: 'eng', id: cmd.id, data });
@@ -218,6 +313,10 @@
         case 'queue': reply({ items: queue() }); break;
         case 'play': play(cmd.videoId, cmd.listId); reply({ ok: true }); break;
         case 'control': control(cmd); reply({ ok: true }); break;
+        case 'playlists': reply(await job(playlists)); break;
+        case 'plAdd': reply(await job(() => plAdd(cmd))); break;
+        case 'plCreate': reply(await job(() => plCreate(cmd))); break;
+        case 'lyrics': reply(await lyrics(cmd)); break;
         case 'audioOnly': window.__ypAudioOnly = !!cmd.value; reply({ ok: true }); break;
         default: reply({ error: 'unknown' });
       }

@@ -21,7 +21,6 @@
     <span class="ic" data-i="search"></span>
     <input id="q" type="search" placeholder="Треки, исполнители, SoundCloud…" enterkeyhint="search">
   </form>
-  <button id="top-set" class="ib" title="Настройки"><span class="ic" data-i="gear"></span></button>
 </header>
 
 <div id="offline" hidden><span class="ic" data-i="wifi"></span><div><b>Нет интернета</b><small>Доступна «Моя музыка» — файлы на этом устройстве</small></div></div>
@@ -69,6 +68,7 @@
       <div class="np-meta">
         <div class="np-txt"><b id="np-title"></b><small id="np-artist"></small><span class="badge" id="np-badge"></span></div>
         <div class="np-acts">
+          <button class="rb" id="np-add" title="Добавить в плейлист"><span class="ic" data-i="plus"></span></button>
           <button class="rb" id="np-like" title="Нравится — сохранить в аккаунт"></button>
           <button class="rb" id="np-dislike" title="Не нравится — больше не предлагать"><span class="ic" data-i="broken"></span></button>
         </div>
@@ -90,7 +90,7 @@
     </div>
     <div class="np-right">
       <div id="lyrics" class="pane on"><div class="ly-scroll"><div class="ly-list" id="ly-list"></div></div>
-        <div class="ly-foot"><span>Тексты: LRCLIB</span><span class="ly-off"><button id="ly-minus">−0,5 с</button><b id="ly-off">синхр.</b><button id="ly-plus">+0,5 с</button></span></div></div>
+        <div class="ly-foot"><span id="ly-src">Текст: LRCLIB</span><span class="ly-off"><button id="ly-minus">−0,5 с</button><b id="ly-off">синхр.</b><button id="ly-plus">+0,5 с</button></span></div></div>
       <div id="queue" class="pane"><div class="q-head"><button class="q-tab on" data-q="queue">Очередь</button><button class="q-tab" data-q="dis">Не нравится <i id="dis-n"></i></button></div>
         <form id="sc-add" class="sc-add"><span class="ic sc" data-i="cloud"></span><input id="sc-url" placeholder="Ссылка SoundCloud на трек или плейлист"><button class="btn">Добавить</button></form>
         <div class="q-list" id="q-list"></div></div>
