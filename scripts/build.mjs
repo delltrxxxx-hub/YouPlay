@@ -11,12 +11,10 @@ console.log('YouPlay', version);
 
 // 1. icons
 execFileSync(process.execPath, ['scripts/make-icon.mjs'], { stdio: 'inherit' });
-execFileSync(process.execPath, ['scripts/make-icons-css.mjs'], { stdio: 'inherit' });
 
-// 2. extension version
-const mf = JSON.parse(readFileSync('extension/manifest.json', 'utf8'));
-mf.version = version;
-writeFileSync('extension/manifest.json', JSON.stringify(mf, null, 2) + '\n');
+// 2. syntax check of the app and engine scripts
+for (const f of ['app/app.js', 'app/icons.js', 'engine/engine.js', 'engine/shield.js', 'engine/sc-bridge.js', 'engine/sc-main.js', 'engine/sc-page.js'])
+  execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' });
 
 // 3. app window (C#, .NET Framework 4.8 + WebView2 SDK from nuget.org)
 mkdirSync('out', { recursive: true });
@@ -36,7 +34,7 @@ writeFileSync('out/app/WebView2Loader.dll', readFileSync(join(wv2, 'runtimes', '
 writeFileSync('out/Launcher.cs', readFileSync('launcher/Launcher.cs', 'utf8').replaceAll('__VERSION__', version));
 const csc = join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
 execFileSync(csc, ['/nologo', '/target:winexe', '/optimize+', '/platform:x64', '/win32icon:build\\icon.ico',
-  '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Net.dll',
+  '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Net.dll', '/r:System.Web.Extensions.dll',
   '/r:out\\app\\Microsoft.Web.WebView2.Core.dll', '/r:out\\app\\Microsoft.Web.WebView2.WinForms.dll',
   '/out:out\\app\\YouPlay.exe', 'out\\Launcher.cs'], { stdio: 'inherit' });
 

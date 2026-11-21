@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="studio">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>YouPlay</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="bg" aria-hidden="true"><div id="bg-a"></div><div id="bg-b"></div></div>
+
+<aside id="side">
+  <div class="logo">YouPlay</div>
+  <nav id="nav"></nav>
+  <div class="side-foot" id="side-foot"></div>
+</aside>
+
+<header id="topbar">
+  <div class="logo">YouPlay</div>
+  <form id="search-form" autocomplete="off">
+    <span class="ic" data-i="search"></span>
+    <input id="q" type="search" placeholder="Треки, исполнители, SoundCloud…" enterkeyhint="search">
+  </form>
+  <button id="top-set" class="ib" title="Настройки"><span class="ic" data-i="gear"></span></button>
+</header>
+
+<div id="offline" hidden><span class="ic" data-i="wifi"></span><div><b>Нет интернета</b><small>Доступна «Моя музыка» — файлы на этом устройстве</small></div></div>
+
+<main id="view"></main>
+
+<footer id="player" hidden>
+  <div class="pl-track" id="pl-open">
+    <img id="pl-art" alt="">
+    <div class="pl-meta"><b id="pl-title"></b><small id="pl-artist"></small></div>
+    <button class="ib pl-like" id="pl-like" title="Нравится"></button>
+  </div>
+  <div class="pl-center">
+    <div class="pl-btns">
+      <button class="ib sm" id="pl-shuffle" title="Перемешать"><span class="ic" data-i="shuffle"></span></button>
+      <button class="ib" id="pl-prev" title="Назад"><span class="ic" data-i="prev"></span></button>
+      <button class="ib play" id="pl-play" title="Играть / пауза"></button>
+      <button class="ib" id="pl-next" title="Далее"><span class="ic" data-i="next"></span></button>
+      <button class="ib sm" id="pl-repeat" title="Повтор"><span class="ic" data-i="repeat"></span></button>
+    </div>
+    <div class="pl-seek"><span id="pl-cur">0:00</span><div class="seek" id="pl-seek"><i class="fill"></i><i class="knob"></i></div><span id="pl-dur">0:00</span></div>
+  </div>
+  <div class="pl-right">
+    <button class="ib sm" id="pl-lyrics" title="Текст"><span class="ic" data-i="lyrics"></span></button>
+    <button class="ib sm" id="pl-queue" title="Очередь"><span class="ic" data-i="queue"></span></button>
+    <span class="ic vol-ic" data-i="volume"></span>
+    <input id="pl-vol" type="range" min="0" max="100" value="100">
+    <button class="ib sm" id="pl-full" title="Сейчас играет"><span class="ic" data-i="expand"></span></button>
+  </div>
+  <i class="mini-bar" id="mini-bar"></i>
+</footer>
+
+<nav id="tabs"></nav>
+
+<section id="np" aria-hidden="true">
+  <div id="np-bg"></div>
+  <div class="np-top">
+    <button class="ib" id="np-close" title="Свернуть"><span class="ic" data-i="down"></span></button>
+    <span id="np-src">Сейчас играет</span>
+    <button class="ib" id="np-sleep" title="Таймер сна"><span class="ic" data-i="moon"></span></button>
+  </div>
+  <div class="np-body">
+    <div class="np-left">
+      <img id="np-art" alt="">
+      <div class="np-meta">
+        <div class="np-txt"><b id="np-title"></b><small id="np-artist"></small><span class="badge" id="np-badge"></span></div>
+        <div class="np-acts">
+          <button class="rb" id="np-like" title="Нравится — сохранить в аккаунт"></button>
+          <button class="rb" id="np-dislike" title="Не нравится — больше не предлагать"><span class="ic" data-i="broken"></span></button>
+        </div>
+      </div>
+      <div class="seek big" id="np-seek"><i class="fill"></i><i class="knob"></i></div>
+      <div class="np-times"><span id="np-cur">0:00</span><span id="np-dur">0:00</span></div>
+      <div class="np-ctrl">
+        <button class="ib" id="np-shuffle"><span class="ic" data-i="shuffle"></span></button>
+        <button class="ib lg" id="np-prev"><span class="ic" data-i="prev"></span></button>
+        <button class="ib play xl" id="np-play"></button>
+        <button class="ib lg" id="np-next"><span class="ic" data-i="next"></span></button>
+        <button class="ib" id="np-repeat"><span class="ic" data-i="repeat"></span></button>
+      </div>
+      <div class="np-chips">
+        <button class="chip" id="np-tab-lyrics"><span class="ic" data-i="lyrics"></span>Текст</button>
+        <button class="chip" id="np-tab-queue"><span class="ic" data-i="queue"></span>Очередь</button>
+        <span class="chip ghost" id="np-sleep-label" hidden></span>
+      </div>
+    </div>
+    <div class="np-right">
+      <div id="lyrics" class="pane on"><div class="ly-scroll"><div class="ly-list" id="ly-list"></div></div>
+        <div class="ly-foot"><span>Тексты: LRCLIB</span><span class="ly-off"><button id="ly-minus">−0,5 с</button><b id="ly-off">синхр.</b><button id="ly-plus">+0,5 с</button></span></div></div>
+      <div id="queue" class="pane"><div class="q-head"><button class="q-tab on" data-q="queue">Очередь</button><button class="q-tab" data-q="dis">Не нравится <i id="dis-n"></i></button></div>
+        <form id="sc-add" class="sc-add"><span class="ic sc" data-i="cloud"></span><input id="sc-url" placeholder="Ссылка SoundCloud на трек или плейлист"><button class="btn">Добавить</button></form>
+        <div class="q-list" id="q-list"></div></div>
+    </div>
+  </div>
+</section>
+
+<div id="modal" hidden></div>
+<div id="toasts"></div>
+<audio id="audio" preload="auto"></audio>
+<iframe id="sc-frame" title="SoundCloud" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
+<script src="icons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

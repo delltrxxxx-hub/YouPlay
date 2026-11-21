@@ -37,48 +37,28 @@ const G = {
 };
 for (const [n, d] of Object.entries(G)) writeFileSync(join(OUT, 'res', 'drawable', n + '.png'), png(glyph(d), 72));
 
-// 2. JavaScript bundles (the same YouPlay code as Windows, with the extension API provided by the app)
-const X = (f) => readFileSync(join('extension', f), 'utf8');
-const css = ['themes.css', 'player.css', 'sc.css', 'hub.css', 'ui2.css', 'mobile.css', 'icons.css'].map(X).join('\n');
-const bg = X('background.js').replace(/\bfetch\(/g, 'window.__ypNativeFetch(');
-const youplay = `(function () {
+// 2. YouPlay's own interface (same app/ as Windows) + the hidden YouTube Music engine + SoundCloud helper
+const NL = String.fromCharCode(10);
+const E = (f) => readFileSync(join('engine', f), 'utf8');
+const once = (flag, body) => `(function () {
 const run = function () {
-if (window.__ypLoaded) return; window.__ypLoaded = true;
-${readFileSync('android/prelude.js', 'utf8')}
-(function () { const st = document.createElement('style'); st.id = 'yp-css'; st.textContent = ${JSON.stringify(css)}; (document.head || document.documentElement).appendChild(st); })();
-${X('shield.js')}
-${X('ytapi.js')}
-${X('bridge.js')}
-(function () {
-${readFileSync('android/chrome-shim.js', 'utf8')}
-(function () {
-${bg}
-})();
-${X('content.js')}
-${X('soundcloud.js')}
-${X('hub.js')}
-${X('mobile.js')}
-})();
+if (window.${flag}) return; window.${flag} = true;
+${body}
 };
 if (document.documentElement) run(); else new MutationObserver(function (m, o) { if (document.documentElement) { o.disconnect(); run(); } }).observe(document, { childList: true });
 })();`;
-writeFileSync(join(OUT, 'assets', 'youplay.js'), youplay);
-const sc = `(function () {
-const run = function () {
-if (window.__ypScLoaded) return; window.__ypScLoaded = true;
-window.chrome = window.chrome || {}; window.chrome.webview = { postMessage: (m) => window.YouPlayNative.postHost(String(m)) };
-${X('bridge.js')}
-${X('sc-main.js')}
-${X('sc-page.js')}
-};
-if (document.documentElement) run(); else new MutationObserver(function (m, o) { if (document.documentElement) { o.disconnect(); run(); } }).observe(document, { childList: true });
-})();`;
-writeFileSync(join(OUT, 'assets', 'sc.js'), sc);
-mkdirSync(join(OUT, 'assets', 'offline'), { recursive: true });
-for (const f of ['index.html', 'offline.css', 'offline.js']) copyFileSync(join('android', 'offline', f), join(OUT, 'assets', 'offline', f));
-run(process.execPath, ['--check', join('android', 'offline', 'offline.js')]);
-// syntax check
-for (const f of ['youplay.js', 'sc.js']) run(process.execPath, ['--check', join(OUT, 'assets', f)]);
+const keepAwake = `try {
+  Object.defineProperty(Document.prototype, 'hidden', { get: () => false, configurable: true });
+  Object.defineProperty(Document.prototype, 'visibilityState', { get: () => 'visible', configurable: true });
+  document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);
+  window.addEventListener('pagehide', (e) => e.stopImmediatePropagation(), true);
+} catch (e) {}`;
+writeFileSync(join(OUT, 'assets', 'engine.js'), once('__ypEngLoaded', [keepAwake, E('shield.js'), E('engine.js')].join(NL)));
+writeFileSync(join(OUT, 'assets', 'sc.js'), once('__ypScLoaded', ['window.chrome = window.chrome || {}; window.chrome.webview = { postMessage: (m) => window.YouPlayNative.postHost(String(m)) };', E('sc-bridge.js'), E('sc-main.js'), E('sc-page.js')].join(NL)));
+mkdirSync(join(OUT, 'assets', 'app'), { recursive: true });
+for (const f of readdirSync('app')) copyFileSync(join('app', f), join(OUT, 'assets', 'app', f));
+for (const f of ['engine.js', 'sc.js']) run(process.execPath, ['--check', join(OUT, 'assets', f)]);
+run(process.execPath, ['--check', join('app', 'app.js')]);
 
 // 3. resources + manifest → base apk (+ R.java)
 run(join(BT, 'aapt2.exe'), ['compile', '--dir', join(OUT, 'res'), '-o', join(OUT, 'res.zip')]);
