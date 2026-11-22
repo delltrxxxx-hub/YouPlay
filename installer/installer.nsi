@@ -45,12 +45,21 @@ Section "Install"
     Sleep 500
     Goto waitloop
   forcekill:
-    nsExec::Exec 'taskkill /F /IM YouPlay.exe'
+    nsExec::Exec 'taskkill /F /T /IM YouPlay.exe'
     Sleep 1500
   closed:
   Sleep 1500
-  ; replace the previous version completely
-  RMDir /r "$INSTDIR"
+  ; replace the previous version completely (retry while Windows still holds files of the old one)
+  StrCpy $R8 0
+  wipe:
+    RMDir /r "$INSTDIR"
+    IfFileExists "$INSTDIR\YouPlay.exe" 0 wiped
+    IntOp $R8 $R8 + 1
+    IntCmp $R8 10 wiped 0 wiped
+    nsExec::Exec 'taskkill /F /T /IM YouPlay.exe'
+    Sleep 1000
+    Goto wipe
+  wiped:
   SetOutPath "$INSTDIR"
   File "..\out\app\YouPlay.exe"
   File "..\out\app\Microsoft.Web.WebView2.Core.dll"

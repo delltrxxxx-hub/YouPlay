@@ -300,7 +300,9 @@ namespace YouPlay
         }
 
         // ═════════ updates ═════════
-        TextBlock updLine; bool updAsked; TextBlock updProgress; Border updBar;
+        TextBlock updLine; bool updAsked; TextBlock updProgress; Border updBar, updManual;
+        static void UpdLog(string s) { try { File.AppendAllText(System.IO.Path.Combine(Program.Data, "update.log"), DateTime.Now + " " + s + Environment.NewLine); } catch { } }
+        void OpenDownloads() { try { Process.Start(new ProcessStartInfo("https://github.com/" + Program.Repo + "/releases/latest") { UseShellExecute = true }); } catch { } }
         string UpdText()
         {
             switch (Updater.State)
@@ -310,7 +312,7 @@ namespace YouPlay
                 case "available": return "Вышла версия " + Updater.LatestTag;
                 case "downloading": return "Скачиваю… " + Updater.Percent + "%";
                 case "installing": return "Устанавливаю — YouPlay сейчас перезапустится";
-                case "error": return "Не удалось проверить обновления";
+                case "error": return "Не получилось обновиться автоматически — скачайте установщик вручную";
                 case "dev": return "Тестовая копия — обновления выключены";
                 default: return "Обновления проверяются при запуске";
             }
@@ -318,6 +320,7 @@ namespace YouPlay
         void OnUpdateState()
         {
             if (updLine != null) updLine.Text = UpdText();
+            if (updManual != null) updManual.Visibility = Updater.State == "error" ? Visibility.Visible : Visibility.Collapsed;
             if (updProgress != null) { updProgress.Text = UpdText(); if (updBar != null) updBar.Width = 380 * (Updater.State == "installing" ? 1 : Updater.Percent / 100.0); }
             if (Updater.State == "available" && !updAsked)
             {
@@ -331,6 +334,7 @@ namespace YouPlay
                 track.Child = updBar; sp.Children.Add(track);
                 var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
                 row.Children.Add(Ui.Pill("Позже", false, () => { updProgress = null; CloseDialog(); }));
+                updManual = Ui.Pill("Скачать вручную", false, OpenDownloads); updManual.Margin = new Thickness(10, 0, 0, 0); updManual.Visibility = Visibility.Collapsed; row.Children.Add(updManual);
                 var go = Ui.Pill("Обновить сейчас", true, UpdateNow); go.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(go);
                 sp.Children.Add(row);
                 OpenDialog(sp, 440);
@@ -347,7 +351,7 @@ namespace YouPlay
             wc.DownloadFileCompleted += (s, e) => Dispatcher.BeginInvoke((Action)(() =>
             {
                 wc.Dispose();
-                if (e.Error != null || e.Cancelled) { Updater.State = "error"; OnUpdateState(); return; }
+                if (e.Error != null || e.Cancelled) { UpdLog("download failed: " + (e.Error != null ? e.Error.ToString() : "cancelled")); Updater.State = "error"; OnUpdateState(); return; }
                 try
                 {
                     if (File.Exists(file)) File.Delete(file);
@@ -357,7 +361,7 @@ namespace YouPlay
                     Process.Start(new ProcessStartInfo(file, "/S") { UseShellExecute = false });
                     var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) }; t.Tick += (a, b) => { t.Stop(); Close(); }; t.Start();
                 }
-                catch { Updater.State = "error"; OnUpdateState(); }
+                catch (Exception ex) { UpdLog("installer start failed: " + ex); Updater.State = "error"; OnUpdateState(); }
             }));
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
             wc.DownloadFileAsync(new Uri(Updater.LatestUrl), file + ".part");
