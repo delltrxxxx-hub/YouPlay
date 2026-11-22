@@ -16,7 +16,7 @@ namespace YouPlay
         public double Time, Dur;
         public event Action TrackChanged, StateChanged;
         public Func<Track, bool> IsDisliked = t => false;
-        DateTime scTick = DateTime.MinValue, lastPlay = DateTime.MinValue;
+        DateTime scTick = DateTime.MinValue, lastPlay = DateTime.MinValue, ytHush = DateTime.MinValue;
         static readonly Random rnd = new Random();
 
         public Player(Engine e)
@@ -67,7 +67,8 @@ namespace YouPlay
         }
         public void Prev() { if (Time > 3) Seek(0); else if (I > 0) PlayAt(I - 1); else Seek(0); }
         public void Toggle() { if (Playing) Pause(); else Resume(); }
-        public void Pause() { if (Cur == null) return; if (Cur.Src == "yt") E.Control("pause"); else E.PlCmd(Cur.Src, "pause", 0); Playing = false; Changed(); }
+        // pause silences every source, so nothing can keep playing in the background
+        public void Pause() { E.Control("pause"); E.StopPage(); Playing = false; Changed(); }
         public void Resume() { if (Cur == null) return; if (Cur.Src == "yt") E.Control("play"); else E.PlCmd(Cur.Src, "play", 0); Playing = true; Changed(); }
         public void Seek(double t) { if (Cur == null) return; Time = t; if (Cur.Src == "yt") E.Control("seek", "time", t); else E.PlCmd(Cur.Src, "seek", t); Changed(); }
         void Changed() { if (StateChanged != null) StateChanged(); }
@@ -82,7 +83,8 @@ namespace YouPlay
         void OnYtState(Dictionary<string, object> s)
         {
             var vid = J.S(s, "videoId");
-            if (Cur == null || Cur.Src != "yt") { if (Radio && vid.Length > 0 && J.B(s, "playing")) Adopt(s); else return; }
+            if (Cur == null) { if (Radio && vid.Length > 0 && J.B(s, "playing")) Adopt(s); else return; }
+            if (Cur.Src != "yt") { if (J.B(s, "playing") && (DateTime.Now - ytHush).TotalSeconds > 1) { ytHush = DateTime.Now; E.Control("pause"); } return; }   // a SoundCloud track or a file plays: YouTube Music stays quiet
             if (Radio && vid.Length > 0 && vid != Cur.VideoId && J.S(s, "title").Length > 0) Adopt(s);
             if (vid.Length > 0 && vid != Cur.VideoId)
             {

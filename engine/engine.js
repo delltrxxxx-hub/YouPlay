@@ -106,9 +106,13 @@
     await settle(() => location.pathname === '/');
     return { sections: sections(pageRoot()) };
   }
+  const pageSig = () => $$('ytmusic-responsive-list-item-renderer a[href*="watch?v="], ytmusic-two-row-item-renderer a[href]', pageRoot()).slice(0, 6).map((a) => a.getAttribute('href')).join('|');
+  let lastSearch = '', lastBrowse = '';
   async function search(q) {
+    const before = pageSig(), same = q === lastSearch && location.pathname === '/search';
     nav({ searchEndpoint: { query: q } });
-    await settle(() => location.pathname === '/search' && new URLSearchParams(location.search).get('q') === q);
+    await settle(() => location.pathname === '/search' && new URLSearchParams(location.search).get('q') === q && (same || pageSig() !== before));
+    lastSearch = q;
     const secs = sections(pageRoot());
     const tracks = [], seen = new Set(), more = [];
     for (const s of secs) for (const it of s.items) {
@@ -122,8 +126,10 @@
     const m = /browse\/([\w-]+)/.exec(href) || /list=([\w-]+)/.exec(href) || /channel\/([\w-]+)/.exec(href);
     if (!m) return { error: 'bad' };
     const id = /list=/.test(href) && !/^VL/.test(m[1]) ? 'VL' + m[1] : m[1];
+    const before = pageSig(), same = id === lastBrowse;
     nav({ browseEndpoint: { browseId: id } });
-    await settle(() => location.href.includes(m[1]));
+    await settle(() => location.href.includes(m[1]) && (same || pageSig() !== before));
+    lastBrowse = id;
     const head = $('ytmusic-responsive-header-renderer, ytmusic-detail-header-renderer, ytmusic-immersive-header-renderer, ytmusic-visual-header-renderer');
     const root = pageRoot();
     const tracks = $$('ytmusic-playlist-shelf-renderer ytmusic-responsive-list-item-renderer, ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer', root).map(row).filter((x) => x.videoId);
@@ -337,7 +343,9 @@
   function clip(c) {
     const id = nowId();
     if (!id || (c.videoId && c.videoId !== id)) return { clip: null };
-    const item = $('ytmusic-player-queue-item[selected]') || $$('ytmusic-player-queue-item').find((q) => (q.data || (q.__data && q.__data.data) || {}).videoId === id);
+    const dataOf = (q) => q.data || (q.__data && q.__data.data) || {};
+    const ids = (d) => { const out = [d.videoId]; try { out.push(d.primaryRenderer.playlistPanelVideoRenderer.videoId, d.counterpart[0].counterpartRenderer.playlistPanelVideoRenderer.videoId); } catch (e) {} return out; };
+    const item = $$('ytmusic-player-queue-item').find((q) => ids(dataOf(q)).indexOf(id) >= 0);
     let d = item ? (item.data || (item.__data && item.__data.data)) : null;
     const type = (x) => { try { return x.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType; } catch (e) { return ''; } };
     if (d && d.primaryRenderer) {

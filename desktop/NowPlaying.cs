@@ -99,8 +99,9 @@ namespace YouPlay
             tools.Children.Add(Ui.IconButton("plus", 40, 20, Ui.TEXT, Colors.Transparent, () => { if (P.Cur != null) AddToPlaylist(P.Cur); }, "В плейлист"));
             npShuffle = Ui.IconButton("shuffle", 40, 20, Ui.TEXT, Colors.Transparent, ToggleShuffle, "Перемешать"); tools.Children.Add(npShuffle);
             npRepeat = Ui.IconButton("repeat", 40, 20, Ui.TEXT, Colors.Transparent, CycleRepeat, "Повтор"); tools.Children.Add(npRepeat);
-            tabLy = Ui.Pill(null, false, () => SetPane("lyrics"), "lyrics"); tabLy.ToolTip = "Текст"; tabLy.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(tabLy);
-            tabQ = Ui.Pill(null, false, () => SetPane("queue"), "queue"); tabQ.ToolTip = "Очередь"; tabQ.Margin = new Thickness(6, 0, 6, 0); tools.Children.Add(tabQ);
+            tabLy = Ui.Pill(null, false, () => { if (Store.Bool("npClean", false)) SetClean(false); SetPane("lyrics"); }, "lyrics"); tabLy.ToolTip = "Текст"; tabLy.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(tabLy);
+            tabQ = Ui.Pill(null, false, () => { if (Store.Bool("npClean", false)) SetClean(false); SetPane("queue"); }, "queue"); tabQ.ToolTip = "Очередь"; tabQ.Margin = new Thickness(6, 0, 6, 0); tools.Children.Add(tabQ);
+            npClean = Ui.Pill(null, false, () => SetClean(!Store.Bool("npClean", false)), "expand"); npClean.ToolTip = "Скрыть текст — только обложка и управление"; npClean.Margin = new Thickness(0, 0, 6, 0); tools.Children.Add(npClean);
             tools.Children.Add(Ui.IconButton("dots", 40, 22, Ui.TEXT, Colors.Transparent, () => { if (P.Cur != null) TrackMenu(P.Cur, null); }, "Ещё"));
             top.Children.Add(tools);
             g.Children.Add(top);
@@ -151,6 +152,7 @@ namespace YouPlay
             var frame = new Border { Margin = new Thickness(0, 16, 0, 0), MaxWidth = 980, CornerRadius = Ui.CR(22), Background = Ui.Br(Ui.A(Colors.Black, 0x30)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x1C)), BorderThickness = new Thickness(1), Padding = new Thickness(20, 10, 20, 8) };
             npMid = new Grid(); frame.Child = npMid;
             Grid.SetRow(frame, 3); col.Children.Add(frame);
+            npFrame = frame; npLyRow = col.RowDefinitions[3];
             lyBox = new Grid { ClipToBounds = true, Margin = new Thickness(0, 0, 0, 34) };
             lyBox.SizeChanged += (s, e) => { lyLast = -2; lyManual = DateTime.MinValue; };
             lyPanel = new StackPanel { RenderTransform = lyShift, VerticalAlignment = VerticalAlignment.Top };
@@ -171,7 +173,16 @@ namespace YouPlay
             L.RenderTransform = new TranslateTransform();
             return L;
         }
-        TextBlock lyOffText; DateTime lyManual = DateTime.MinValue; Border npFollowHost;
+        TextBlock lyOffText; DateTime lyManual = DateTime.MinValue; Border npFollowHost, npFrame, npClean; RowDefinition npLyRow;
+        /// <summary>Clean view: no lyrics frame, just the cover, the title and the controls.</summary>
+        void SetClean(bool on)
+        {
+            Store.Set("npClean", on);
+            npFrame.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            npLyRow.MinHeight = on ? 0 : 150; npLyRow.Height = on ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            PaintTab(npClean, on);
+            npClean.ToolTip = on ? "Показать текст" : "Скрыть текст — только обложка и управление";
+        }
         static string Norm(string s) { return Regex.Replace((s ?? "").ToLowerInvariant(), @"[^\p{L}\p{N}]", ""); }
         Grid flipBox; Border npBack; bool flipped, flipping; string backFor;
         void FlipCover()
@@ -218,6 +229,7 @@ namespace YouPlay
         }
 
         // ── the music video behind Now Playing (only on this screen, muted, follows the song) ──
+        string lastClipId, lastClipFor;
         Grid clipHost; Microsoft.Web.WebView2.Wpf.WebView2CompositionControl clipView; string clipFor, clipId; bool clipReady, clipPlaying; DateTime clipSync;
         async void CheckClip()
         {
@@ -239,7 +251,8 @@ namespace YouPlay
                 var hit = cands.FirstOrDefault(x => Regex.IsMatch(x.Title, "official|video|клип", RegexOptions.IgnoreCase)) ?? cands.FirstOrDefault();
                 if (hit != null) id = hit.VideoId;
             }
-            if (id.Length == 0) { StopClip(); return; }
+            if (id.Length == 0 || (id == lastClipId && lastClipFor != t.Key)) { StopClip(); return; }   // never carry one clip over to another track
+            lastClipId = id; lastClipFor = t.Key;
             await EnsureClipView();
             if (clipView == null || clipView.CoreWebView2 == null) return;
             clipId = id; clipPlaying = false;
@@ -292,8 +305,8 @@ var pl=null,want=null;
 function onYouTubeIframeAPIReady(){send({ev:'ready'});if(want)loadClip(want[0],want[1]);}
 window.loadClip=function(id,t){if(!window.YT||!YT.Player){want=[id,t];return;}if(pl&&pl.loadVideoById){pl.loadVideoById({videoId:id,startSeconds:t});pl.mute();return;}
 pl=new YT.Player('p',{videoId:id,playerVars:{autoplay:1,mute:1,controls:0,disablekb:1,fs:0,iv_load_policy:3,modestbranding:1,rel:0,playsinline:1,start:Math.floor(t)},
-events:{onReady:function(e){e.target.mute();e.target.playVideo();},onStateChange:function(e){if(e.data===1)send({ev:'playing'});},onError:function(){send({ev:'error'});}}});};
-window.syncClip=function(t,playing){if(!pl||!pl.getCurrentTime)return;if(Math.abs(pl.getCurrentTime()-t)>1.5)pl.seekTo(t,true);var s=pl.getPlayerState();if(playing&&s!==1)pl.playVideo();if(!playing&&s===1)pl.pauseVideo();};
+events:{onReady:function(e){e.target.mute();e.target.setVolume(0);e.target.playVideo();},onStateChange:function(e){if(e.data===1)send({ev:'playing'});},onError:function(){send({ev:'error'});}}});};
+window.syncClip=function(t,playing){if(!pl||!pl.getCurrentTime)return;try{if(!pl.isMuted())pl.mute();pl.setVolume(0);}catch(e){}if(Math.abs(pl.getCurrentTime()-t)>1.5)pl.seekTo(t,true);var s=pl.getPlayerState();if(playing&&s!==1)pl.playVideo();if(!playing&&s===1)pl.pauseVideo();};
 window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
 </script><script src='https://www.youtube.com/iframe_api'></script></body></html>";
         Border SmallChip(string s, Action a) { return SmallChipEl(Ui.Text(s, 12, Ui.TEXT, true), a); }
@@ -321,7 +334,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             npOpen = true; npLayer.Visibility = Visibility.Visible;
             var tt = (TranslateTransform)npLayer.RenderTransform;
             tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(ActualHeight, 0, TimeSpan.FromMilliseconds(340)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
-            PaintNP(); SetPane(npPane);
+            PaintNP(); SetPane(npPane); SetClean(Store.Bool("npClean", false));
             clipFor = null; CheckClip();
         }
         void CloseNP()

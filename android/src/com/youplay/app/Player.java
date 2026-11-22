@@ -25,7 +25,7 @@ final class Player implements Engine.Listener {
     int repeat = 0;   // 0 off, 1 all, 2 one
     double time, dur;
     MediaPlayer mp;
-    long scTick = 0, lastPlay = 0;
+    long scTick = 0, lastPlay = 0, ytHush = 0;
 
     Player(Context c) { ctx = c; }
 
@@ -105,9 +105,8 @@ final class Player implements Engine.Listener {
     // ── engine events ──
     @Override public void onState(JSONObject s) {
         String vid = s.optString("videoId");
-        if (cur == null || !"yt".equals(cur.src)) {
-            if (radio && !vid.isEmpty() && s.optBoolean("playing")) adoptRadio(s); else return;
-        }
+        if (cur == null) { if (radio && !vid.isEmpty() && s.optBoolean("playing")) adoptRadio(s); else return; }
+        if (!"yt".equals(cur.src)) { if (s.optBoolean("playing") && System.currentTimeMillis() - ytHush > 1000) { ytHush = System.currentTimeMillis(); engine.control("pause"); } return; }
         if (radio && !vid.isEmpty() && !vid.equals(cur.videoId) && !s.optString("title").isEmpty()) adoptRadio(s);
         if (!vid.isEmpty() && !vid.equals(cur.videoId)) {
             // YouTube Music moved on by itself (autoplay / repeat): follow what really plays
