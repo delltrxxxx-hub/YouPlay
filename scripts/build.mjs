@@ -48,6 +48,14 @@ execFileSync(csc, ['/nologo', '/preferreduilang:en-US', '/target:winexe', '/opti
   '/r:' + ['out', 'app', 'Microsoft.Web.WebView2.Core.dll'].join(BS), '/r:' + ['out', 'app', 'Microsoft.Web.WebView2.Wpf.dll'].join(BS),
   '/out:' + ['out', 'app', 'YouPlay.exe'].join(BS), ...srcs], { stdio: 'inherit' });
 
+// WebView2 runtime setup from Microsoft (installed by our installer only when the PC does not have it)
+const wvSetup = join('out', 'MicrosoftEdgeWebview2Setup.exe');
+if (!existsSync(wvSetup)) {
+  const r = await fetch('https://go.microsoft.com/fwlink/p/?LinkId=2124703', { redirect: 'follow' });
+  if (!r.ok) throw new Error('WebView2 setup download failed: ' + r.status);
+  writeFileSync(wvSetup, Buffer.from(await r.arrayBuffer()));
+}
+
 // 4. installer (NSIS from the electron-builder cache)
 function findMakensis() {
   const roots = [join(os.homedir(), 'AppData', 'Local', 'electron-builder', 'Cache', 'nsis')];

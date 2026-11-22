@@ -71,6 +71,19 @@ Section "Install"
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall YouPlay.exe"
 
+  ; Microsoft Edge WebView2 Runtime: part of Windows 10/11, installed here only if this PC lacks it
+  ReadRegStr $R5 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  StrCmp $R5 "" 0 wvok
+  ReadRegStr $R5 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  StrCmp $R5 "" wvinstall wvok
+  wvinstall:
+    SetOutPath "$TEMP"
+    File "..\out\MicrosoftEdgeWebview2Setup.exe"
+    ExecWait '"$TEMP\MicrosoftEdgeWebview2Setup.exe" /silent /install'
+    Delete "$TEMP\MicrosoftEdgeWebview2Setup.exe"
+    SetOutPath "$INSTDIR"
+  wvok:
+
   ; fresh shortcuts pointing at an icon file with a new name every version,
   ; so Windows cannot keep showing its cached old icon
   Delete "$DESKTOP\YouPlay.lnk"

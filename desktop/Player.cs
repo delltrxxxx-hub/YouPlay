@@ -16,7 +16,7 @@ namespace YouPlay
         public double Time, Dur;
         public event Action TrackChanged, StateChanged;
         public Func<Track, bool> IsDisliked = t => false;
-        DateTime scTick = DateTime.MinValue;
+        DateTime scTick = DateTime.MinValue, lastPlay = DateTime.MinValue;
         static readonly Random rnd = new Random();
 
         public Player(Engine e)
@@ -45,7 +45,7 @@ namespace YouPlay
             var t = List[k];
             if (IsDisliked(t)) { if (k + 1 < List.Count) PlayAt(k + 1); return; }
             StopAll(t.Src);
-            I = k; Cur = t; Time = 0; Dur = t.Duration; Playing = true;
+            I = k; Cur = t; Time = 0; Dur = t.Duration; Playing = true; lastPlay = DateTime.Now;
             if (t.Src == "yt") { E.Control("expectEnd", "value", true); E.Eng("play", "videoId", t.VideoId); }
             else if (t.Src == "sc") E.ScLoad(t.Url);
             else E.PlayLocal(t.Id);
@@ -84,7 +84,16 @@ namespace YouPlay
             var vid = J.S(s, "videoId");
             if (Cur == null || Cur.Src != "yt") { if (Radio && vid.Length > 0 && J.B(s, "playing")) Adopt(s); else return; }
             if (Radio && vid.Length > 0 && vid != Cur.VideoId && J.S(s, "title").Length > 0) Adopt(s);
-            if (vid.Length > 0 && vid != Cur.VideoId) return;
+            if (vid.Length > 0 && vid != Cur.VideoId)
+            {
+                // YouTube Music moved on by itself (autoplay / repeat / ad): follow what really plays
+                if (!Radio && (DateTime.Now - lastPlay).TotalSeconds < 6) return;   // still switching to our own track
+                int k = List.FindIndex(x => x.Src == "yt" && x.VideoId == vid);
+                if (k >= 0) { I = k; Cur = List[k]; if (TrackChanged != null) TrackChanged(); }
+                else if (!Radio && I + 1 < List.Count) { PlayAt(I + 1); return; }
+                else if (J.S(s, "title").Length > 0) Adopt(s);
+                else return;
+            }
             Playing = J.B(s, "playing"); Time = J.D(s, "time"); var d = J.D(s, "dur"); if (d > 0) Dur = d;
             if (Cur.Art.Length == 0) Cur.Art = J.S(s, "art");
             if (Cur.Title.Length == 0) Cur.Title = J.S(s, "title");

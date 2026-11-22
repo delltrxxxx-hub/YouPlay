@@ -211,7 +211,13 @@
       liked: pressed(['Нравится', 'Like']), disliked: pressed(['Не нравится', 'Dislike']), ad: !!$('#movie_player.ad-showing'),
     };
     // stop at the end when the app plays the next track itself
-    if (expectEnd && st.dur && st.dur - st.time < 0.35 && st.time > 1 && endSent !== id) { endSent = id; v.pause(); send({ t: 'ended', videoId: id }); }
+    if (expectEnd && st.dur && st.dur - st.time < 0.6 && st.time > 1 && endSent !== id) { endSent = id; v.pause(); send({ t: 'ended', videoId: id }); }
+    // exact end of a track: the video's own events (the 250 ms loop can miss the last moment)
+    if (!v.__ypEnd) {
+      v.__ypEnd = true;
+      const atEnd = () => { const vid2 = nowId(); if (!expectEnd || !isFinite(v.duration) || v.currentTime < 1 || endSent === vid2) return; if (v.duration - v.currentTime < 0.6 || v.ended) { endSent = vid2; v.pause(); send({ t: 'ended', videoId: vid2 }); } };
+      v.addEventListener('timeupdate', atEnd); v.addEventListener('ended', atEnd);
+    }
     const key = JSON.stringify({ ...st, time: Math.round(st.time * 4) });
     if (key !== lastState) { lastState = key; send(st); }
   }, 250);

@@ -25,7 +25,7 @@ final class Player implements Engine.Listener {
     int repeat = 0;   // 0 off, 1 all, 2 one
     double time, dur;
     MediaPlayer mp;
-    long scTick = 0;
+    long scTick = 0, lastPlay = 0;
 
     Player(Context c) { ctx = c; }
 
@@ -45,7 +45,7 @@ final class Player implements Engine.Listener {
         Track t = list.get(k);
         if (MainActivity.current != null && MainActivity.current.isDisliked(t)) { if (k + 1 < list.size()) playAt(k + 1); return; }
         stopAll(t.src);
-        i = k; cur = t; time = 0; dur = t.duration; playing = true;
+        i = k; cur = t; time = 0; dur = t.duration; playing = true; lastPlay = System.currentTimeMillis();
         if ("yt".equals(t.src)) { engine.control("expectEnd", "value", true); engine.eng("play", null, "videoId", t.videoId); }
         else if ("sc".equals(t.src)) engine.scLoad(t.url);
         else playLocal(t);
@@ -109,7 +109,15 @@ final class Player implements Engine.Listener {
             if (radio && !vid.isEmpty() && s.optBoolean("playing")) adoptRadio(s); else return;
         }
         if (radio && !vid.isEmpty() && !vid.equals(cur.videoId) && !s.optString("title").isEmpty()) adoptRadio(s);
-        if (!vid.isEmpty() && !vid.equals(cur.videoId)) return;
+        if (!vid.isEmpty() && !vid.equals(cur.videoId)) {
+            // YouTube Music moved on by itself (autoplay / repeat): follow what really plays
+            if (!radio && System.currentTimeMillis() - lastPlay < 6000) return;
+            int k = -1; for (int j = 0; j < list.size(); j++) if ("yt".equals(list.get(j).src) && vid.equals(list.get(j).videoId)) { k = j; break; }
+            if (k >= 0) { i = k; cur = list.get(k); if (view != null) view.onTrack(); }
+            else if (!radio && i + 1 < list.size()) { playAt(i + 1); return; }
+            else if (!s.optString("title").isEmpty()) adoptRadio(s);
+            else return;
+        }
         playing = s.optBoolean("playing"); time = s.optDouble("time", 0); double d = s.optDouble("dur", 0); if (d > 0) dur = d;
         if (cur.art.isEmpty()) cur.art = s.optString("art", "");
         if (cur.title.isEmpty()) cur.title = s.optString("title", "");
