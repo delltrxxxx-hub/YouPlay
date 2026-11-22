@@ -91,7 +91,7 @@ Section "Install"
   ClearErrors
   ${GetOptions} $R0 "/norun" $R1
   IfErrors 0 +2
-    Exec '"$INSTDIR\YouPlay.exe" --no-update'
+    Exec '"$INSTDIR\YouPlay.exe"'
 SectionEnd
 
 Section "Uninstall"
