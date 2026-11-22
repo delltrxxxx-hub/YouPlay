@@ -88,13 +88,14 @@ namespace YouPlay
             Playing = J.B(s, "playing"); Time = J.D(s, "time"); var d = J.D(s, "dur"); if (d > 0) Dur = d;
             if (Cur.Art.Length == 0) Cur.Art = J.S(s, "art");
             if (Cur.Title.Length == 0) Cur.Title = J.S(s, "title");
+            if (Cur.ArtistHref == null && J.S(s, "artistHref").Length > 0) Cur.ArtistHref = J.S(s, "artistHref");
             bool likeChanged = Cur.Liked != J.B(s, "liked") || Cur.Disliked != J.B(s, "disliked");
             Cur.Liked = J.B(s, "liked"); Cur.Disliked = J.B(s, "disliked");
             if (likeChanged && TrackChanged != null) TrackChanged(); else Changed();
         }
         void Adopt(Dictionary<string, object> s)
         {
-            var t = new Track { Src = "yt", VideoId = J.S(s, "videoId"), Title = J.S(s, "title"), Artist = Track.CleanArtist(J.S(s, "artist")), Art = J.S(s, "art") };
+            var t = new Track { Src = "yt", VideoId = J.S(s, "videoId"), Title = J.S(s, "title"), Artist = Track.CleanArtist(J.S(s, "artist")), Art = J.S(s, "art"), ArtistHref = J.S(s, "artistHref").Length > 0 ? J.S(s, "artistHref") : null };
             List.Add(t); I = List.Count - 1; Cur = t;
             if (TrackChanged != null) TrackChanged();
         }

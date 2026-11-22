@@ -63,6 +63,8 @@ namespace YouPlay
             sp.Children.Add(MenuItem("play", "Играть сейчас", () => { CloseDialog(); PlayList(new List<Track> { t }, 0, t.Title); }));
             sp.Children.Add(MenuItem("queue", "Играть следующим", () => { CloseDialog(); P.AddNext(t); Toast("Будет играть следующим: " + t.Title); }));
             sp.Children.Add(MenuItem("plus", "Добавить в плейлист…", () => AddToPlaylist(t)));
+            if (t.Src == "yt") sp.Children.Add(MenuItem("user", "Перейти к исполнителю", () => { CloseDialog(); CloseNP(); OpenArtistFor(t); }));
+            sp.Children.Add(MenuItem("lyrics", "О треке", () => TrackInfo(t)));
             if (pl != null) sp.Children.Add(MenuItem("close", "Убрать из «" + J.S(pl, "name") + "»", () => { CloseDialog(); RemoveFrom(pl, t); }));
             if (t.Src == "sc") { bool liked = ScLiked(t.Url); sp.Children.Add(MenuItem(liked ? "heart" : "heartLine", liked ? "Убрать лайк в SoundCloud" : "Лайк в SoundCloud", () => { CloseDialog(); LikeSc(t); })); }
             if (t.Src == "yt" && t.VideoId != null) sp.Children.Add(MenuItem("yt", "Открыть в YouTube Music", () => { CloseDialog(); try { Process.Start(new ProcessStartInfo("https://music.youtube.com/watch?v=" + t.VideoId) { UseShellExecute = true }); } catch { } }));

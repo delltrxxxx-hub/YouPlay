@@ -84,6 +84,12 @@ namespace YouPlay
             p.Navigate("https://youplay.local/player.html");
         }
 
+        public void Block(CoreWebView2 w)
+        {
+            foreach (var f in new[] { "*doubleclick.net/*", "*googlesyndication.com/*", "*googleadservices.com/*", "*youtube.com/pagead/*", "*youtube.com/api/stats/ads*", "*youtube.com/ptracking*", "*youtube.com/get_midroll_*", "*imasdk.googleapis.com/*" })
+                w.AddWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All);
+            w.WebResourceRequested += (s, e) => { if (!e.Request.Uri.StartsWith("https://youplay.local/")) e.Response = Env.CreateWebResourceResponse(null, 403, "Blocked", ""); };
+        }
         const string KeepAwake = "try{Object.defineProperty(Document.prototype,'hidden',{get:function(){return false},configurable:true});Object.defineProperty(Document.prototype,'visibilityState',{get:function(){return 'visible'},configurable:true});document.addEventListener('visibilitychange',function(e){e.stopImmediatePropagation()},true);}catch(e){}";
 
         // ── YouTube Music engine ──

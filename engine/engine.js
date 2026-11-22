@@ -39,7 +39,12 @@
       artist, durText: dur,
       art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : (v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ''),
       browse: !v && link ? link.getAttribute('href') : null,
+      artistHref: artistLink(n),
     };
+  }
+  function artistLink(n) {
+    const a = n && n.querySelector('.secondary-flexible-columns a[href*="channel/"], .secondary-flexible-columns a[href*="browse/UC"], .subtitle a[href*="channel/"], .subtitle a[href*="browse/UC"], .byline a[href*="channel/"], .byline a[href*="browse/UC"]');
+    return a ? a.getAttribute('href') : null;
   }
   function card(n) {
     const a = n.querySelector('a.image-wrapper, a[href]');
@@ -48,7 +53,7 @@
     const v = /watch\?v=/.test(href) ? new URL(href, location.origin).searchParams.get('v') : null;
     return {
       src: 'yt', kind: v ? 'song' : /channel\//.test(href) ? 'artist' : 'playlist', videoId: v, browse: v ? null : href,
-      title: text(n.querySelector('.title')), artist: text(n.querySelector('.subtitle, .details .subtitle')).replace(/^\s*(композиция|песня|трек|song|track|видео|video|клип|сингл|single|ep|альбом|album|плейлист|playlist)\s*[•·]\s*/i, ''),
+      artistHref: artistLink(n), title: text(n.querySelector('.title')), artist: text(n.querySelector('.subtitle, .details .subtitle')).replace(/^\s*(композиция|песня|трек|song|track|видео|video|клип|сингл|single|ep|альбом|album|плейлист|playlist)\s*[•·]\s*/i, ''),
       art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : (v ? `https://i.ytimg.com/vi/${v}/hqdefault.jpg` : ''),
       round: !!n.querySelector('.image-wrapper[aria-label], ytmusic-thumbnail-renderer[thumbnail-crop="MUSIC_THUMBNAIL_CROP_CIRCLE"]') || /channel\//.test(href),
     };
@@ -115,6 +120,15 @@
     const root = pageRoot();
     const tracks = $$('ytmusic-playlist-shelf-renderer ytmusic-responsive-list-item-renderer, ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer', root).map(row).filter((x) => x.videoId);
     const img = head && head.querySelector('img');
+    const isArtist = /channel\/|browse\/UC/.test(href) || !!$('ytmusic-immersive-header-renderer, ytmusic-visual-header-renderer');
+    if (isArtist) {
+      const sb = subBtn();
+      return {
+        artist: true, title: text(head && head.querySelector('h1, .title')), subtitle: text(head && head.querySelector('.subscription-count, .subtitle, .strapline')),
+        art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : '', subscribed: sb ? isSub(sb) : false, canSubscribe: !!sb,
+        tracks: tracks.slice(0, 20), sections: sections(root).filter((x) => x.layout === 'cards'),
+      };
+    }
     return {
       title: text(head && head.querySelector('h1, .title')), subtitle: text(head && head.querySelector('.subtitle, .strapline, .description')),
       art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : (tracks[0] && tracks[0].art) || '',
@@ -184,6 +198,7 @@
     const art = md && md.artwork && md.artwork.length ? md.artwork[md.artwork.length - 1].src : (b && b.querySelector('img.image') ? b.querySelector('img.image').src : '');
     const st = {
       t: 'state', videoId: id, playing: !v.paused, time: v.currentTime, dur: isFinite(v.duration) ? v.duration : 0, volume: v.volume,
+      artistHref: artistLink(b),
       title: md ? md.title : text(b && b.querySelector('.title')), artist: md ? md.artist : '', album: md ? md.album : '', art: big(art),
       liked: pressed(['Нравится', 'Like']), disliked: pressed(['Не нравится', 'Dislike']), ad: !!$('#movie_player.ad-showing'),
     };
@@ -304,6 +319,81 @@
     return { text: out, source: src };
   }
 
+  // ── the music video of the playing track (for the Now Playing background) ──
+  function clip(c) {
+    const id = nowId();
+    if (!id || (c.videoId && c.videoId !== id)) return { clip: null };
+    const item = $('ytmusic-player-queue-item[selected]') || $$('ytmusic-player-queue-item').find((q) => (q.data || (q.__data && q.__data.data) || {}).videoId === id);
+    let d = item ? (item.data || (item.__data && item.__data.data)) : null;
+    const type = (x) => { try { return x.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType; } catch (e) { return ''; } };
+    if (d && d.primaryRenderer) {
+      const p = d.primaryRenderer.playlistPanelVideoRenderer || {}; const cp = d.counterpart && d.counterpart[0] && d.counterpart[0].counterpartRenderer && d.counterpart[0].counterpartRenderer.playlistPanelVideoRenderer;
+      if (type(p) === 'MUSIC_VIDEO_TYPE_OMV' || type(p) === 'MUSIC_VIDEO_TYPE_UGC') return { clip: p.videoId || id };
+      if (cp && (type(cp) === 'MUSIC_VIDEO_TYPE_OMV' || type(cp) === 'MUSIC_VIDEO_TYPE_UGC')) return { clip: cp.videoId, offset: 0 };
+      return { clip: null };
+    }
+    if (d && (type(d) === 'MUSIC_VIDEO_TYPE_OMV' || type(d) === 'MUSIC_VIDEO_TYPE_UGC')) return { clip: d.videoId || id };
+    return { clip: null };
+  }
+
+  // ── credits of the playing track (YouTube Music's own "Credits" dialog, when it has one) ──
+  async function credits(c) {
+    if (c.videoId && nowId() !== c.videoId) return { items: [] };
+    const btn = $('ytmusic-player-bar ytmusic-menu-renderer #button-shape button, ytmusic-player-bar ytmusic-menu-renderer button');
+    if (!btn) return { items: [] };
+    btn.click();
+    const pop = await waitFor(() => $$('ytmusic-menu-popup-renderer').find(vis), 3000);
+    if (!pop) return { items: [] };
+    const item = $$('ytmusic-menu-navigation-item-renderer, ytmusic-menu-service-item-renderer', pop).find((i) => /авторы|сведения|credits/i.test(text(i)));
+    if (!item) { esc(); return { items: [] }; }
+    (item.querySelector('a, tp-yt-paper-item') || item).click();
+    const dlg = await waitFor(() => $$('ytmusic-dismissable-dialog-renderer, tp-yt-paper-dialog').find((d) => vis(d) && text(d).length > 10), 5000);
+    const out = [];
+    if (dlg) {
+      const secs = $$('ytmusic-dismissable-dialog-description-section-renderer, .section, yt-formatted-string.description', dlg);
+      const lines = (dlg.innerText || '').split('\n').map((x) => x.trim()).filter(Boolean);
+      // pairs: a role title followed by names
+      for (let i = 1; i + 1 < lines.length && out.length < 12; i += 2) { if (lines[i].length < 40) out.push({ role: lines[i], names: lines[i + 1] }); }
+      esc();
+      if (!secs.length && !out.length) return { items: [] };
+    }
+    return { items: out };
+  }
+
+  // ── artists: subscribe and the list of subscriptions ──
+  const subBtn = () => $('ytmusic-browse-response:not([hidden]) ytmusic-subscribe-button-renderer, ytmusic-subscribe-button-renderer');
+  const isSub = (b) => b.hasAttribute('subscribed') || b.getAttribute('is-subscribed') === 'true' || /вы подписаны|subscribed/i.test(text(b)) && !/^подписаться|^subscribe$/i.test(text(b));
+  async function subscribe(c) {
+    if (!signedIn()) return { ok: false, login: false };
+    const m = /browse\/([\w-]+)/.exec(c.href) || /channel\/([\w-]+)/.exec(c.href);
+    if (!m) return { ok: false };
+    nav({ browseEndpoint: { browseId: m[1] } });
+    await settle(() => location.href.includes(m[1]), 8000);
+    const b = await waitFor(subBtn, 5000);
+    if (!b) return { ok: false };
+    if (isSub(b) !== !!c.on) {
+      (b.querySelector('button') || b).click();
+      await wait(700);
+      const confirm = $$('yt-confirm-dialog-renderer button, tp-yt-paper-dialog button').find((x) => /отказаться|unsubscribe|отписаться/i.test(text(x)));
+      if (confirm) { confirm.click(); await wait(600); }
+    }
+    const b2 = subBtn();
+    return { ok: true, subscribed: b2 ? isSub(b2) : !!c.on };
+  }
+  async function artists() {
+    if (!signedIn()) return { login: false, items: [] };
+    nav({ browseEndpoint: { browseId: 'FEmusic_library_corpus_artists' } });
+    await settle(() => /FEmusic_library_corpus_artists|library\/artists/.test(location.href), 8000);
+    const out = [], seen = new Set();
+    for (const el of $$('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer', pageRoot())) {
+      const a = el.querySelector('a[href*="channel/"], a[href*="browse/UC"]'); if (!a) continue;
+      const href = a.getAttribute('href'); if (seen.has(href)) continue; seen.add(href);
+      const img = el.querySelector('img');
+      out.push({ name: text(el.querySelector('.title')), href, art: img && img.src && !img.src.startsWith('data:') ? big(img.src) : '' });
+    }
+    return { login: true, items: out };
+  }
+
   // ── commands from the app ──
   window.__ypEng = async function (cmd) {
     const reply = (data) => send({ t: 'eng', id: cmd.id, data });
@@ -321,6 +411,10 @@
         case 'plAdd': reply(await job(() => plAdd(cmd))); break;
         case 'plCreate': reply(await job(() => plCreate(cmd))); break;
         case 'lyrics': reply(await lyrics(cmd)); break;
+        case 'subscribe': reply(await job(() => subscribe(cmd))); break;
+        case 'artists': reply(await job(artists)); break;
+        case 'clip': reply(clip(cmd)); break;
+        case 'credits': reply(await job(() => credits(cmd))); break;
         case 'audioOnly': window.__ypAudioOnly = !!cmd.value; reply({ ok: true }); break;
         default: reply({ error: 'unknown' });
       }

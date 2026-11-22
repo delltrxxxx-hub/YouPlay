@@ -114,7 +114,7 @@ namespace YouPlay
     /// <summary>One track (or a card that opens a page) from YouTube Music, SoundCloud or a file.</summary>
     class Track
     {
-        public string Src = "yt", Kind = "song", VideoId, Url, Id, Title = "", Artist = "", Art = "", DurText = "", Browse, LikedAt;
+        public string Src = "yt", Kind = "song", VideoId, Url, Id, Title = "", Artist = "", Art = "", DurText = "", Browse, LikedAt, ArtistHref;
         public double Duration; public bool Liked, Disliked, Round;
         public string Key { get { return Src == "sc" ? "sc:" + Url : Src == "local" ? "local:" + Id : "yt:" + VideoId; } }
         public bool Playable { get { return (Src == "yt" && !string.IsNullOrEmpty(VideoId)) || (Src == "sc" && !string.IsNullOrEmpty(Url)) || (Src == "local" && !string.IsNullOrEmpty(Id)); } }
@@ -130,7 +130,7 @@ namespace YouPlay
             t.Title = J.S(o, "title"); t.Artist = CleanArtist(J.S(o, "artist")); t.Art = J.S(o, "art");
             t.DurText = J.S(o, "durText"); t.Browse = N(o, "browse"); t.LikedAt = N(o, "likedAt");
             t.Duration = J.D(o, "duration"); if (t.Duration > 100000) t.Duration /= 1000;
-            t.Round = J.B(o, "round");
+            t.Round = J.B(o, "round"); t.ArtistHref = N(o, "artistHref");
             return t;
         }
         public static List<Track> List(IEnumerable<Dictionary<string, object>> a, string defSrc) { var l = new List<Track>(); foreach (var o in a) l.Add(From(o, defSrc)); return l; }
@@ -138,6 +138,7 @@ namespace YouPlay
         {
             var d = J.Make("src", Src, "kind", Kind, "videoId", VideoId, "url", Url, "id", Id, "title", Title, "artist", Artist, "art", Art, "durText", DurText, "duration", Duration);
             if (LikedAt != null) d["likedAt"] = LikedAt;
+            if (ArtistHref != null) d["artistHref"] = ArtistHref;
             return d;
         }
         public Track Copy() { return From(Json(), Src); }

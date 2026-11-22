@@ -28,7 +28,9 @@ namespace YouPlay
             left.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); left.ColumnDefinitions.Add(new ColumnDefinition()); left.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             barArt = Ui.Cover(null, 56, 56, 10, "music"); left.Children.Add(barArt);
             var meta = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 10, 0) };
-            bTitle = Ui.Text("", 14.5, Ui.TEXT, true); bArtist = Ui.Text("", 12.5, Ui.MUTED); bArtist.Margin = new Thickness(0, 4, 0, 0);
+            bTitle = Ui.Text("", 14.5, Ui.TEXT, true); bArtist = Ui.Text("", 12.5, Ui.MUTED); bArtist.Margin = new Thickness(0, 4, 0, 0); bArtist.Cursor = Cursors.Hand;
+            bArtist.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) { OpenArtistFor(P.Cur); e.Handled = true; } };
+            bArtist.MouseEnter += (s, e) => bArtist.TextDecorations = TextDecorations.Underline; bArtist.MouseLeave += (s, e) => bArtist.TextDecorations = null;
             meta.Children.Add(bTitle); meta.Children.Add(bArtist); Grid.SetColumn(meta, 1); left.Children.Add(meta);
             bLike = Ui.IconButton("heartLine", 36, 19, Ui.TEXT, Colors.Transparent, Like, "Нравится"); Grid.SetColumn(bLike, 2); left.Children.Add(bLike);
             var leftHit = new Border { Child = left, Background = Brushes.Transparent, Cursor = Cursors.Hand };
@@ -80,10 +82,13 @@ namespace YouPlay
         System.Windows.Controls.Image npBg; SeekBar npSeek; ScrollViewer qScroll; StackPanel qList; Grid lyBox; StackPanel lyPanel; TranslateTransform lyShift = new TranslateTransform(); string npPane = "lyrics";
         Grid BuildNowPlaying()
         {
-            var L = new Grid { Visibility = Visibility.Collapsed, Background = Ui.Br(Ui.BG), ClipToBounds = true };
-            npBg = new System.Windows.Controls.Image { Stretch = Stretch.UniformToFill, Opacity = 0.5, Effect = new BlurEffect { Radius = 90, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance }, Margin = new Thickness(-120) };
+            var L = new Grid { Visibility = Visibility.Collapsed, Background = Ui.Br(Color.FromRgb(Ui.BG.R, Ui.BG.G, Ui.BG.B)), ClipToBounds = true };
+            npBg = new System.Windows.Controls.Image { Stretch = Stretch.UniformToFill, Opacity = 0.75 };
+            RenderOptions.SetBitmapScalingMode(npBg, BitmapScalingMode.HighQuality);
             L.Children.Add(npBg);
-            L.Children.Add(new Border { Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Ui.A(Ui.BG, 0x70), 0), new GradientStop(Ui.A(Ui.BG, 0xC8), 0.6), new GradientStop(Ui.A(Ui.BG, 0xF0), 1) }, 90) });
+            clipHost = new Grid { Opacity = 0, IsHitTestVisible = false }; L.Children.Add(clipHost);
+            L.Children.Add(new Border { IsHitTestVisible = false, Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Ui.A(Ui.BG, 0x30), 0), new GradientStop(Ui.A(Ui.BG, 0x78), 0.55), new GradientStop(Ui.A(Ui.BG, 0xC8), 1) }, 90) });
+            L.Children.Add(new Border { IsHitTestVisible = false, Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Ui.A(Ui.BG, 0xB0), 0), new GradientStop(Ui.A(Ui.BG, 0x40), 0.45), new GradientStop(Ui.A(Ui.BG, 0x10), 1) }, 0) });
             var g = new Grid { Margin = new Thickness(40, 18, 40, 26) };
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); g.RowDefinitions.Add(new RowDefinition());
             // top
@@ -101,14 +106,22 @@ namespace YouPlay
             var left = new Grid();
             left.RowDefinitions.Add(new RowDefinition()); left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             npArt = new Border { CornerRadius = new CornerRadius(18), Background = Ui.Br(Ui.S2), HorizontalAlignment = HorizontalAlignment.Stretch, Effect = new DropShadowEffect { BlurRadius = 50, ShadowDepth = 14, Opacity = 0.5 } };
-            var artBox = new Grid(); artBox.Children.Add(npArt);
-            artBox.SizeChanged += (s, e) => { double side = Math.Max(120, Math.Min(e.NewSize.Width, e.NewSize.Height)); npArt.Width = side; npArt.Height = side; };
+            var artBox = new Grid();
+            // the cover flips over: the back side tells about the track
+            flipBox = new Grid { RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1), Cursor = Cursors.Hand, ToolTip = "Нажмите — обложка перевернётся: исполнители, альбом, год" };
+            npBack = new Border { CornerRadius = new CornerRadius(18), Background = Ui.Br(Ui.A(Ui.SURF, 0xF0)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Padding = new Thickness(22, 18, 22, 18) };
+            flipBox.Children.Add(npArt); flipBox.Children.Add(npBack);
+            artBox.Children.Add(flipBox);
+            flipBox.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) FlipCover(); };
+            artBox.SizeChanged += (s, e) => { double side = Math.Max(120, Math.Min(e.NewSize.Width, e.NewSize.Height)); npArt.Width = side; npArt.Height = side; npBack.Width = side; npBack.Height = side; };
             left.Children.Add(artBox);
             var ctrls = new StackPanel { Margin = new Thickness(0, 22, 0, 0) };
             var mg = new Grid(); mg.ColumnDefinitions.Add(new ColumnDefinition()); mg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var mt = new StackPanel();
             npTitle = Ui.Text("", 26, Ui.TEXT, true, true); npTitle.FontWeight = FontWeights.Bold;
-            npArtist = Ui.Text("", 15, Ui.MUTED); npArtist.Margin = new Thickness(0, 4, 0, 8);
+            npArtist = Ui.Text("", 15, Ui.MUTED); npArtist.Margin = new Thickness(0, 4, 0, 8); npArtist.Cursor = Cursors.Hand; npArtist.ToolTip = "Открыть страницу исполнителя";
+            npArtist.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) { CloseNP(); OpenArtistFor(P.Cur); } };
+            npArtist.MouseEnter += (s, e) => npArtist.TextDecorations = TextDecorations.Underline; npArtist.MouseLeave += (s, e) => npArtist.TextDecorations = null;
             npBadgeHost = new Border { HorizontalAlignment = HorizontalAlignment.Left };
             mt.Children.Add(npTitle); mt.Children.Add(npArtist); mt.Children.Add(npBadgeHost);
             mg.Children.Add(mt);
@@ -138,11 +151,12 @@ namespace YouPlay
             body.Children.Add(left);
             // right pane
             npMid = new Grid(); Grid.SetColumn(npMid, 2); body.Children.Add(npMid);
-            lyBox = new Grid { ClipToBounds = true };
-            lyBox.OpacityMask = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Colors.Transparent, 0), new GradientStop(Colors.Black, 0.12), new GradientStop(Colors.Black, 0.82), new GradientStop(Colors.Transparent, 1) }, 90);
+            lyBox = new Grid { ClipToBounds = true, Margin = new Thickness(0, 0, 0, 56) };
+            lyBox.SizeChanged += (s, e) => { lyLast = -2; lyManual = DateTime.MinValue; };
             lyPanel = new StackPanel { RenderTransform = lyShift, VerticalAlignment = VerticalAlignment.Top };
-            lyBox.Children.Add(lyPanel);
-            lyBox.PreviewMouseWheel += (s, e) => { lyManual = DateTime.Now; var y = lyShift.Y + e.Delta * 0.6; lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = Math.Min(lyBox.ActualHeight * 0.4, Math.Max(-lyPanel.ActualHeight + lyBox.ActualHeight * 0.4, y)); e.Handled = true; };
+            var lyCanvas = new Canvas(); lyCanvas.Children.Add(lyPanel); lyBox.Children.Add(lyCanvas);
+            lyBox.SizeChanged += (s, e) => lyPanel.Width = Math.Max(100, e.NewSize.Width);   // a canvas never clips the long lyrics column to the box height
+            lyBox.PreviewMouseWheel += (s, e) => { lyManual = DateTime.Now; var y = lyShift.Y + e.Delta * 0.6; lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = ClampShift(y); e.Handled = true; };
             npMid.Children.Add(lyBox);
             var lyFoot = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
             lySrc = Ui.Text("", 11.5, Ui.FAINT); lySrc.VerticalAlignment = VerticalAlignment.Center; lyFoot.Children.Add(lySrc);
@@ -158,6 +172,118 @@ namespace YouPlay
             return L;
         }
         TextBlock lyOffText; DateTime lyManual = DateTime.MinValue;
+        Grid flipBox; Border npBack; bool flipped, flipping; string backFor;
+        void FlipCover()
+        {
+            if (flipping) return;
+            flipping = true;
+            var st = (ScaleTransform)flipBox.RenderTransform;
+            var half = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(170)) { EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn } };
+            half.Completed += (s, e) =>
+            {
+                flipped = !flipped;
+                npArt.Visibility = flipped ? Visibility.Collapsed : Visibility.Visible;
+                npBack.Visibility = flipped ? Visibility.Visible : Visibility.Collapsed;
+                if (flipped && P.Cur != null && backFor != P.Cur.Key) { backFor = P.Cur.Key; var sp = new StackPanel(); var sv = Ui.Scroll(sp); npBack.Child = sv; FillTrackInfo(sp, P.Cur, true); }
+                var back = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = new System.Windows.Media.Animation.BackEase { Amplitude = 0.25, EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+                back.Completed += (a, b) => flipping = false;
+                st.BeginAnimation(ScaleTransform.ScaleXProperty, back);
+            };
+            st.BeginAnimation(ScaleTransform.ScaleXProperty, half);
+        }
+        void UnflipCover() { if (flipped && !flipping) FlipCover(); backFor = null; }
+        readonly System.Diagnostics.Stopwatch lyClock = System.Diagnostics.Stopwatch.StartNew(); double lyPrev = -1;
+        double ClampShift(double y) { double h = lyBox.ActualHeight, ph = lyPanel.ActualHeight; if (h <= 0) return y; return Math.Max(Math.Min(h * 0.45, -ph + h * 0.45), Math.Min(h * 0.45, y)); }
+
+        // ── backdrop: the cover blurred once into a small bitmap (no live blur, so lyrics stay smooth) ──
+        void SetBackdrop(string url)
+        {
+            if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) { npBg.Source = null; return; }
+            try
+            {
+                var bi = new System.Windows.Media.Imaging.BitmapImage();
+                bi.BeginInit(); bi.UriSource = new Uri(url); bi.DecodePixelWidth = 120; bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; bi.EndInit();
+                Action make = () =>
+                {
+                    var holder = new Grid { Width = 120, Height = 120, ClipToBounds = true };
+                    holder.Children.Add(new System.Windows.Controls.Image { Source = bi, Stretch = Stretch.UniformToFill, Margin = new Thickness(-22), Effect = new BlurEffect { Radius = 16 } });
+                    holder.Measure(new Size(120, 120)); holder.Arrange(new Rect(0, 0, 120, 120)); holder.UpdateLayout();
+                    var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(120, 120, 96, 96, PixelFormats.Pbgra32); rtb.Render(holder); rtb.Freeze();
+                    npBg.Source = rtb;
+                };
+                if (bi.IsDownloading) bi.DownloadCompleted += (s, e) => make(); else make();
+            }
+            catch { npBg.Source = null; }
+        }
+
+        // ── the music video behind Now Playing (only on this screen, muted, follows the song) ──
+        Grid clipHost; Microsoft.Web.WebView2.Wpf.WebView2CompositionControl clipView; string clipFor, clipId; bool clipReady, clipPlaying; DateTime clipSync;
+        async void CheckClip()
+        {
+            var t = P.Cur;
+            if (!npOpen || t == null || t.Src != "yt" || !Store.Bool("clipBg", false)) { StopClip(); return; }
+            if (clipFor == t.Key) return;
+            clipFor = t.Key;
+            var r = await E.Eng("clip", "videoId", t.VideoId);
+            if (P.Cur == null || P.Cur.Key != t.Key || !npOpen) return;
+            var id = J.S(r, "clip");
+            if (id.Length == 0) { StopClip(); return; }
+            await EnsureClipView();
+            if (clipView == null || clipView.CoreWebView2 == null) return;
+            clipId = id; clipPlaying = false;
+            try { await clipView.CoreWebView2.ExecuteScriptAsync("window.loadClip && loadClip(" + J.Str(id) + "," + ((int)P.Time).ToString() + ")"); } catch { }
+        }
+        async Task EnsureClipView()
+        {
+            if (clipView != null) { if (!clipReady) await Task.Delay(1500); return; }
+            try
+            {
+                clipView = new Microsoft.Web.WebView2.Wpf.WebView2CompositionControl { IsHitTestVisible = false };
+                clipHost.Children.Add(clipView);
+                await clipView.EnsureCoreWebView2Async(E.Env);
+                var c = clipView.CoreWebView2;
+                c.IsMuted = true;
+                c.Settings.AreDefaultContextMenusEnabled = false;
+                E.Block(c);
+                c.AddWebResourceRequestedFilter("https://youplay.local/*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+                c.WebResourceRequested += (s, e) => { if (e.Request.Uri.StartsWith("https://youplay.local/")) e.Response = E.Env.CreateWebResourceResponse(new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(ClipHtml)), 200, "OK", "Content-Type: text/html; charset=utf-8"); };
+                c.WebMessageReceived += (s, e) =>
+                {
+                    var m = J.Parse(e.TryGetWebMessageAsString());
+                    if (J.S(m, "ev") == "ready") clipReady = true;
+                    else if (J.S(m, "ev") == "playing") { if (!clipPlaying) { clipPlaying = true; Ui.Fade(clipHost, 1, 900); } }
+                    else if (J.S(m, "ev") == "error") StopClip();
+                };
+                var done = new TaskCompletionSource<bool>();
+                c.NavigationCompleted += (s, e) => done.TrySetResult(true);
+                c.Navigate("https://youplay.local/clip.html");
+                await done.Task; await Task.Delay(1200);
+            }
+            catch { clipView = null; }
+        }
+        void StopClip()
+        {
+            clipPlaying = false; clipId = null;
+            Ui.Fade(clipHost, 0, 300);
+            try { if (clipView != null && clipView.CoreWebView2 != null) clipView.CoreWebView2.ExecuteScriptAsync("window.stopClip && stopClip()"); } catch { }
+        }
+        void SyncClip()
+        {
+            if (clipView == null || clipId == null || clipView.CoreWebView2 == null || (DateTime.Now - clipSync).TotalSeconds < 2) return;
+            clipSync = DateTime.Now;
+            try { clipView.CoreWebView2.ExecuteScriptAsync("window.syncClip && syncClip(" + P.Time.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "," + (P.Playing ? "true" : "false") + ")"); } catch { }
+        }
+        const string ClipHtml = @"<!doctype html><html><head><meta charset='utf-8'><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p,iframe{position:fixed;left:-17.5vw;top:-17.5vh;width:135vw!important;height:135vh!important;border:0;pointer-events:none}</style></head><body><div id='p'></div>
+<script>
+function send(o){try{chrome.webview.postMessage(JSON.stringify(o));}catch(e){}}
+var pl=null,want=null;
+function onYouTubeIframeAPIReady(){send({ev:'ready'});if(want)loadClip(want[0],want[1]);}
+window.loadClip=function(id,t){if(!window.YT||!YT.Player){want=[id,t];return;}if(pl&&pl.loadVideoById){pl.loadVideoById({videoId:id,startSeconds:t});pl.mute();return;}
+pl=new YT.Player('p',{videoId:id,playerVars:{autoplay:1,mute:1,controls:0,disablekb:1,fs:0,iv_load_policy:3,modestbranding:1,rel:0,playsinline:1,start:Math.floor(t)},
+events:{onReady:function(e){e.target.mute();e.target.playVideo();},onStateChange:function(e){if(e.data===1)send({ev:'playing'});},onError:function(){send({ev:'error'});}}});};
+window.syncClip=function(t,playing){if(!pl||!pl.getCurrentTime)return;if(Math.abs(pl.getCurrentTime()-t)>1.5)pl.seekTo(t,true);var s=pl.getPlayerState();if(playing&&s!==1)pl.playVideo();if(!playing&&s===1)pl.pauseVideo();};
+window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
+</script><script src='https://www.youtube.com/iframe_api'></script></body></html>";
         Border SmallChip(string s, Action a) { return SmallChipEl(Ui.Text(s, 12, Ui.TEXT, true), a); }
         Border SmallChipEl(TextBlock t, Action a) { t.VerticalAlignment = VerticalAlignment.Center; return Ui.Click(new Border { Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(15), Background = Ui.Br(Ui.A(Colors.White, 0x18)), Child = t, Margin = new Thickness(6, 0, 0, 0) }, a, Ui.A(Colors.White, 0x2A)); }
         void SetPane(string p)
@@ -184,11 +310,12 @@ namespace YouPlay
             var tt = (TranslateTransform)npLayer.RenderTransform;
             tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(ActualHeight, 0, TimeSpan.FromMilliseconds(340)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
             PaintNP(); SetPane(npPane);
+            clipFor = null; CheckClip();
         }
         void CloseNP()
         {
             if (!npOpen) return;
-            npOpen = false;
+            npOpen = false; StopClip(); clipFor = null;
             var tt = (TranslateTransform)npLayer.RenderTransform;
             var a = new DoubleAnimation(0, ActualHeight, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
             a.Completed += (s, e) => { if (!npOpen) npLayer.Visibility = Visibility.Collapsed; };
@@ -237,13 +364,14 @@ namespace YouPlay
             {
                 lastArt = t.Art;
                 Ui.Load(barArt, t.Art, 56, "music"); Ui.Load(npArt, t.Art, 520, "music");
-                try { npBg.Source = string.IsNullOrEmpty(t.Art) || !t.Art.StartsWith("http") ? null : new System.Windows.Media.Imaging.BitmapImage(new Uri(t.Art)); } catch { npBg.Source = null; }
+                SetBackdrop(t.Art);
             }
             if (t.Key != lastKey)
             {
                 lastKey = t.Key;
                 var recent = Store.List("recent").Where(x => Track.From(x, "yt").Key != t.Key).Take(23).ToList(); recent.Insert(0, t.Json()); Store.SetList("recent", recent);
                 LoadLyrics(t);
+                UnflipCover(); StopClip(); clipFor = null; if (npOpen) Dispatcher.BeginInvoke((Action)(async () => { await Task.Delay(2500); CheckClip(); }));
                 if (npOpen && npPane == "queue") PaintQueue();
             }
             PaintNP();
@@ -255,7 +383,7 @@ namespace YouPlay
             if (P.Cur == null) return;
             double p = P.Dur > 0 ? Math.Min(1, P.Time / P.Dur) : 0;
             bSeek.Set(p); bCur.Text = Ui.Fmt(P.Time); bDur.Text = Ui.Fmt(P.Dur);
-            if (npOpen) { npSeek.Set(p); npCur.Text = Ui.Fmt(P.Time); npDur.Text = Ui.Fmt(P.Dur); }
+            if (npOpen) { npSeek.Set(p); npCur.Text = Ui.Fmt(P.Time); npDur.Text = Ui.Fmt(P.Dur); SyncClip(); }
         }
 
         // ═════════ lyrics: LRCLIB (synced, word by word), YouTube Music as a fallback ═════════
@@ -294,6 +422,30 @@ namespace YouPlay
             if (res == null) res = best(await get("https://lrclib.net/api/search?track_name=" + Http.Enc(t) + "&artist_name=" + Http.Enc(a)));
             if (res == null || J.S(res, "syncedLyrics").Length == 0) { var b2 = best(await get("https://lrclib.net/api/search?q=" + Http.Enc(t + " " + a))); if (b2 != null && (res == null || J.S(b2, "syncedLyrics").Length > 0)) res = b2; }
             if (my != lyReq) return;
+            if (res == null || J.S(res, "syncedLyrics").Length == 0)
+            {
+                // Textyl: synced lyrics for many tracks LRCLIB does not have
+                var tx = await Http.Get("https://api.textyl.co/api/lyrics?q=" + Http.Enc(a + " " + t));
+                if (my != lyReq) return;
+                if ((int)J.D(tx, "status") == 200)
+                {
+                    object parsed = null; try { parsed = J.Ser.DeserializeObject(J.S(tx, "body")); } catch { }
+                    var arr = parsed as object[];
+                    if (arr != null && arr.Length > 3)
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        foreach (var o in arr) { var x = o as Dictionary<string, object>; if (x == null) continue; double sec = J.D(x, "seconds"); sb.AppendFormat("[{0:00}:{1:00.00}]{2}\n", (int)(sec / 60), sec % 60, J.S(x, "lyrics")); }
+                        res = J.Make("syncedLyrics", sb.ToString().Replace(',', '.'), "duration", 0, "via", "Textyl");
+                    }
+                }
+            }
+            if (res == null || (J.S(res, "syncedLyrics").Length == 0 && J.S(res, "plainLyrics").Length == 0))
+            {
+                var ov = await Http.Get("https://api.lyrics.ovh/v1/" + Http.Enc(a) + "/" + Http.Enc(t));
+                if (my != lyReq) return;
+                var lyr = (int)J.D(ov, "status") == 200 ? J.S(J.Parse(J.S(ov, "body")), "lyrics").Trim() : "";
+                if (lyr.Length > 20) res = J.Make("plainLyrics", lyr, "via", "lyrics.ovh");
+            }
             bool ytm = false;
             if ((res == null || (J.S(res, "syncedLyrics").Length == 0 && J.S(res, "plainLyrics").Length == 0)) && it.Src == "yt")
             {
@@ -340,13 +492,13 @@ namespace YouPlay
                     l.View = tb; lyPanel.Children.Add(tb);
                 }
                 lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = 160;
-                lySrc.Text = "Текст: LRCLIB · подсветка по словам";
+                lySrc.Text = "Текст: " + (J.S(res, "via").Length > 0 ? J.S(res, "via") : "LRCLIB") + " · подсветка по словам";
             }
             else if (plain.Length > 0)
             {
                 var tb = Ui.Wrap(plain.Replace("\r", ""), 22, Ui.TEXT, true); tb.LineHeight = 34; lyPanel.Children.Add(tb);
                 lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = 20;
-                lySrc.Text = "Синхронного текста нет — показан обычный (" + (ytm ? "YouTube Music" : "LRCLIB") + "). Прокрутка колёсиком.";
+                lySrc.Text = "Синхронного текста нет — показан обычный (" + (ytm ? "YouTube Music" : J.S(res, "via").Length > 0 ? J.S(res, "via") : "LRCLIB") + "). Прокрутка колёсиком.";
             }
             else LyMsg(res != null && J.B(res, "instrumental") ? "♪ Инструментал" : net ? "Нет связи с сервером текстов" : "Текст для этой песни не найден");
         }
@@ -362,7 +514,7 @@ namespace YouPlay
         static readonly Color dim = Ui.A(Ui.TEXT, 0x48), past = Ui.A(Ui.TEXT, 0x6E);
         void LyricsFrame(object sender, EventArgs e)
         {
-            var now = DateTime.Now; double dt = lyFrame == DateTime.MinValue ? 0 : Math.Min(0.1, (now - lyFrame).TotalSeconds); lyFrame = now;
+            double nowS = lyClock.Elapsed.TotalSeconds; double dt = lyPrev < 0 ? 0 : Math.Min(0.1, nowS - lyPrev); lyPrev = nowS;
             if (!npOpen || npPane != "lyrics" || ly.Count == 0 || P.Cur == null) return;
             if (P.Playing) smooth += dt;
             if (Math.Abs(smooth - P.Time) > 0.3 || !P.Playing) smooth = P.Time;
@@ -387,11 +539,10 @@ namespace YouPlay
                     v.Foreground = Ui.Br(dim);
                     var grow = new DoubleAnimation(1.04, TimeSpan.FromMilliseconds(380)) { EasingFunction = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut } };
                     ((ScaleTransform)v.RenderTransform).BeginAnimation(ScaleTransform.ScaleXProperty, grow); ((ScaleTransform)v.RenderTransform).BeginAnimation(ScaleTransform.ScaleYProperty, grow);
-                    v.Effect = new DropShadowEffect { Color = Ui.Accent, BlurRadius = 24, ShadowDepth = 0, Opacity = 0.35 };
                     if ((DateTime.Now - lyManual).TotalSeconds > 4)
                     {
                         var p = v.TranslatePoint(new Point(0, 0), lyPanel);
-                        double target = lyBox.ActualHeight * 0.36 - p.Y - v.ActualHeight / 2;
+                        double target = ClampShift(lyBox.ActualHeight * 0.38 - p.Y - v.ActualHeight / 2);
                         lyShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(target, TimeSpan.FromMilliseconds(650)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
                     }
                 }
@@ -412,7 +563,7 @@ namespace YouPlay
                     // the word fills from left to right
                     var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
                     b.GradientStops.Add(new GradientStop(Ui.TEXT, 0)); b.GradientStops.Add(new GradientStop(Ui.TEXT, q)); b.GradientStops.Add(new GradientStop(dim, Math.Min(1, q + 0.08))); b.GradientStops.Add(new GradientStop(dim, 1));
-                    run.Foreground = b;
+                    b.Freeze(); run.Foreground = b;
                 }
             }
         }

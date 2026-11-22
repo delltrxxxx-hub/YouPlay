@@ -38,11 +38,11 @@ namespace YouPlay
             UseLayoutRounding = true; SnapsToDevicePixels = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
             try { Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(System.IO.Path.Combine(Program.Dir, "YouPlay.exe"))); } catch { }
-            Ui.Accent = Ui.C((int)Store.Num("accent", 0xFF5A36));
+            LoadTheme();
             RestoreBounds_();
             P = new Player(E) { IsDisliked = IsDisliked };
             BuildShell();
-            SourceInitialized += (s, e) => Caption();
+            SourceInitialized += (s, e) => ApplyBackdrop();
             Loaded += async (s, e) => await Start();
             Closing += (s, e) => { SaveBounds(); Store.SaveNow(); try { E.Host.Close(); } catch { } };
             PreviewKeyDown += OnKey;
@@ -63,7 +63,7 @@ namespace YouPlay
             try { await E.Init(); }
             catch (Exception ex) { MessageBox.Show(this, "Не удалось запустить WebView2: " + ex.Message + "\n\nУстановите «Microsoft Edge WebView2 Runtime» с сайта Microsoft.", "YouPlay"); Close(); return; }
             E.Adblock = Store.Bool("adblock", true);
-            E.ReadyChanged += () => { E.Eng("audioOnly", "value", true); E.Volume(Store.Num("volume", 1)); ApplyEq(); if (tab == "home" && stack.Count == 1 && Store.Obj("home") == null) LoadHome(); if (tab == "settings") ShowTab("settings"); };
+            E.ReadyChanged += () => { E.Eng("audioOnly", "value", true); E.Volume(Store.Num("volume", 1)); ApplyEq(); if (tab == "home" && stack.Count == 1 && Store.Obj("home") == null) LoadHome(); if (tab == "settings") ShowTab("settings"); SyncArtists(); };
             P.TrackChanged += OnTrack; P.StateChanged += OnPlayState;
             if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); ShowTab("home");
             var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) }; t.Tick += (s, e) => Tick(); t.Start();
@@ -90,7 +90,10 @@ namespace YouPlay
             logo.Children.Add(lt);
             DockPanel.SetDock(logo, Dock.Top); side.Children.Add(logo);
             var foot = new StackPanel(); DockPanel.SetDock(foot, Dock.Bottom); side.Children.Add(foot);
-            nav = new StackPanel(); side.Children.Add(nav);
+            var mid = new Grid(); mid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); mid.RowDefinitions.Add(new RowDefinition());
+            nav = new StackPanel(); mid.Children.Add(nav);
+            sideArtists = new StackPanel(); var sas = Ui.Scroll(sideArtists); Grid.SetRow(sas, 1); mid.Children.Add(sas);
+            side.Children.Add(mid);
             sidebar = new Border { Child = side, BorderBrush = Ui.Br(Ui.A(Colors.White, 0x10)), BorderThickness = new Thickness(0, 0, 1, 0) };
             top.Children.Add(sidebar);
             sideFoot = foot;
@@ -124,7 +127,7 @@ namespace YouPlay
             toastLayer = new Grid { IsHitTestVisible = false }; overlay.Children.Add(toastLayer);
             var all = new Grid(); all.Children.Add(root); all.Children.Add(overlay);
             Content = all;
-            PaintNav();
+            PaintNav(); PaintSideArtists();
         }
         StackPanel sideFoot;
         public static FrameworkElement LogoMark(double size)
@@ -196,6 +199,7 @@ namespace YouPlay
             bool inText = Keyboard.FocusedElement is TextBox;
             if (e.Key == Key.Escape) { if (inText) { Keyboard.ClearFocus(); FocusManager.SetFocusedElement(this, this); } else Back(); e.Handled = true; return; }
             if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
+            if (e.Key == Key.F9) { try { System.IO.File.AppendAllText(System.IO.Path.Combine(Program.Data, "errors.log"), "LY shift=" + lyShift.Y + " panelH=" + lyPanel.ActualHeight + " boxH=" + lyBox.ActualHeight + " boxW=" + lyBox.ActualWidth + " lines=" + ly.Count + " last=" + lyLast + " kids=" + lyPanel.Children.Count + " vis=" + lyBox.Visibility + " panelW=" + lyPanel.ActualWidth + " op=" + lyPanel.Opacity + Environment.NewLine); } catch { } return; }
             if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F) { searchBox.Focus(); searchBox.SelectAll(); e.Handled = true; return; }
             if (inText) return;
             if (e.Key == Key.Space) { P.Toggle(); e.Handled = true; }
@@ -648,13 +652,15 @@ namespace YouPlay
             body.Children.Add(AccRow("yt", Ui.YT, "YouTube Music", !E.Ready ? "Подключаюсь…" : yIn ? "✓ Вход выполнен" : "Вход не выполнен", yIn ? "Сменить" : "Войти", () => Login("google")));
             body.Children.Add(AccRow("cloud", Ui.SC, "SoundCloud", !scChecked ? "Проверяю…" : scLogin ? "✓ " + (scUser.Length > 0 ? scUser : "Подключён") : "Вход не выполнен", scLogin ? "Выйти" : "Войти", async () => { if (scLogin) { await E.ScLogout(); scLogin = false; var lc = Store.Obj("likes"); if (lc != null) { lc["sc"] = new object[0]; Store.Save(); } ShowTab("settings"); } else Login("sc"); }));
             if (!scChecked) CheckSc();
+            body.Children.Add(SetTitle("Тема"));
+            body.Children.Add(ThemePicker());
             body.Children.Add(SetTitle("Цвет акцента"));
             var acc = new StackPanel { Orientation = Orientation.Horizontal };
             foreach (var col0 in new[] { 0xFF5A36, 0xFF3D6E, 0xFFB020, 0x2BC48A, 0x22B8E6, 0x4A7DFF, 0x9B6BFF, 0xE6E1DC })
             {
                 var col = col0; var c = Ui.C(col);
                 var dot = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Ui.Br(c), Margin = new Thickness(0, 0, 10, 0), BorderBrush = Ui.Br(Ui.TEXT), BorderThickness = new Thickness(c == Ui.Accent ? 3 : 0) };
-                Ui.Click(dot, () => { Ui.Accent = c; Store.Set("accent", col); roots.Clear(); ShowTab("settings"); RebuildChrome(); }, c);
+                Ui.Click(dot, () => { Ui.Accent = c; Store.Set("accent", col); RebuildAll(); }, c);
                 acc.Children.Add(dot);
             }
             body.Children.Add(acc);
@@ -663,6 +669,8 @@ namespace YouPlay
             body.Children.Add(SetTitle("Воспроизведение"));
             body.Children.Add(Toggle("autoNP", true, "Открывать плеер на весь экран при запуске трека", "Обложка, текст по словам и очередь"));
             body.Children.Add(Toggle("adblock", true, "Блокировка рекламы", "Реклама в YouTube Music не показывается и не звучит"));
+            body.Children.Add(SetTitle("Бета"));
+            body.Children.Add(Toggle("clipBg", false, "Клип на фоне (бета)", "В «Сейчас играет» вместо фона играет клип без звука, если он есть у трека. Если клипа нет — остаётся фон в цвет обложки"));
             body.Children.Add(SetTitle("Моя музыка"));
             body.Children.Add(AccRow("music", Ui.LOCAL, "Папка с музыкой", Engine.MusicFolder(), "Выбрать", PickFolder));
             body.Children.Add(SetTitle("Не предлагать"));
