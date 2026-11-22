@@ -31,6 +31,8 @@ namespace YouPlay
                 sp.Children.Add(Ui.Cover(J.S(a, "art"), 30, 30, 15, "user"));
                 var t = Ui.Text(J.S(a, "name"), 13.5, Ui.MUTED, true); t.Margin = new Thickness(11, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; t.MaxWidth = 150; sp.Children.Add(t);
                 var b = new Border { Height = 42, Padding = new Thickness(10, 0, 10, 0), CornerRadius = Ui.CR(12), Background = Ui.Br(Colors.Transparent), Child = sp };
+                b.ToolTip = "Правый клик — отписаться";
+                b.MouseRightButtonUp += (s, e) => { Confirm("Отписаться от " + J.S(a, "name") + "?", "Исполнитель пропадёт из «Мои исполнители»" + (J.B(E.Account, "signedIn") ? " и из подписок YouTube Music." : "."), "Отписаться", () => Follow(J.S(a, "href"), J.S(a, "name"), J.S(a, "art"), false, () => PaintFollow())); e.Handled = true; };
                 sideArtists.Children.Add(Ui.Click(b, () => OpenArtist(J.S(a, "href"), J.S(a, "name"), J.S(a, "art")), Ui.A(Colors.White, 0x0C)));
             }
         }
@@ -51,6 +53,42 @@ namespace YouPlay
             Toast(on ? "Вы подписаны на " + name : "Вы отписались от " + name);
             if (done != null) done();
             if (J.B(E.Account, "signedIn")) { var r = await E.Eng("subscribe", "href", href, "on", on); if (!J.B(r, "ok")) Toast("YouTube Music не принял подписку — она сохранена в YouPlay"); }
+        }
+
+        // ═════════ follow from the player ═════════
+        string npArtistHref;
+        void PaintFollow()
+        {
+            if (npFollowHost == null) return;
+            var t = P.Cur;
+            if (t == null || t.Src != "yt") { npFollowHost.Child = null; return; }
+            npArtistHref = t.ArtistHref;
+            bool f = npArtistHref != null && Following(npArtistHref);
+            var b = new Border { Height = 30, Padding = new Thickness(12, 0, 14, 0), CornerRadius = Ui.CR(15), Background = Ui.Br(f ? Ui.A(Colors.White, 0x1C) : Ui.Fill), ToolTip = f ? "Нажмите, чтобы отписаться" : "Подписаться на исполнителя" };
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var ic = Ui.Icon(f ? "check" : "plus", 15, f ? Ui.TEXT : Ui.OnFill); ic.Margin = new Thickness(0, 0, 6, 0); sp.Children.Add(ic);
+            sp.Children.Add(Ui.Text(f ? "Вы подписаны" : "Подписаться", 12.5, f ? Ui.TEXT : Ui.OnFill, true));
+            b.Child = sp;
+            npFollowHost.Child = Ui.Click(b, FollowCurrent, f ? Ui.A(Colors.White, 0x2A) : Ui.Lighten(Ui.Fill, 0.15));
+        }
+        async void FollowCurrent()
+        {
+            var t = P.Cur; if (t == null) return;
+            var hit = await ResolveArtist(t);
+            if (hit == null) { Toast("Не нашёл страницу исполнителя"); return; }
+            if (t.ArtistHref == null) t.ArtistHref = hit.Browse;
+            Follow(hit.Browse, hit.Title, hit.Art, !Following(hit.Browse), PaintFollow);
+        }
+        /// <summary>The artist's page of a track: from the track itself, or found by name.</summary>
+        async Task<Track> ResolveArtist(Track t)
+        {
+            var name = Regex.Split(t.Artist ?? "", @",| и | & | feat\.| ft\.| x ", RegexOptions.IgnoreCase)[0].Trim();
+            if (!string.IsNullOrEmpty(t.ArtistHref)) { var known = MyArtists().FirstOrDefault(a => ArtistKey(J.S(a, "href")) == ArtistKey(t.ArtistHref)); return new Track { Browse = t.ArtistHref, Title = known != null ? J.S(known, "name") : name, Art = known != null ? J.S(known, "art") : null }; }
+            if (t.Src != "yt" || name.Length == 0) return null;
+            var r = await E.Eng("search", "q", name);
+            var more = Track.List(J.A(r, "more"), "yt");
+            return more.FirstOrDefault(x => x.Browse != null && Regex.IsMatch(x.Browse, @"channel/|browse/UC") && (x.Kind == "artist" || x.Round || string.Equals(x.Title, name, StringComparison.CurrentCultureIgnoreCase)))
+                ?? more.FirstOrDefault(x => x.Browse != null && Regex.IsMatch(x.Browse, @"channel/|browse/UC"));
         }
 
         // ═════════ artist page ═════════
@@ -83,7 +121,8 @@ namespace YouPlay
             paintFollow = () =>
             {
                 bool f = Following(href);
-                var nb = Ui.Pill(f ? "Вы подписаны" : "Подписаться", !f, () => Follow(href, title, img, !Following(href), paintFollow), f ? "check" : "plus");
+                var nb = Ui.Pill(f ? "Вы подписаны" : "Подписаться", !f, () => Follow(href, title, img, !Following(href), () => { paintFollow(); PaintFollow(); }), f ? "check" : "plus");
+                nb.ToolTip = f ? "Нажмите, чтобы отписаться" : "Подписаться на исполнителя";
                 if (followBtn != null && followBtn.Parent is Panel) { var p = (Panel)followBtn.Parent; int i = p.Children.IndexOf(followBtn); p.Children.RemoveAt(i); nb.Margin = followBtn.Margin; p.Children.Insert(i, nb); }
                 followBtn = nb;
             };

@@ -89,69 +89,69 @@ namespace YouPlay
             clipHost = new Grid { Opacity = 0, IsHitTestVisible = false }; L.Children.Add(clipHost);
             L.Children.Add(new Border { IsHitTestVisible = false, Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Ui.A(Ui.BG, 0x30), 0), new GradientStop(Ui.A(Ui.BG, 0x78), 0.55), new GradientStop(Ui.A(Ui.BG, 0xC8), 1) }, 90) });
             L.Children.Add(new Border { IsHitTestVisible = false, Background = new LinearGradientBrush(new GradientStopCollection { new GradientStop(Ui.A(Ui.BG, 0xB0), 0), new GradientStop(Ui.A(Ui.BG, 0x40), 0.45), new GradientStop(Ui.A(Ui.BG, 0x10), 1) }, 0) });
-            var g = new Grid { Margin = new Thickness(40, 18, 40, 26) };
+            // one centred column, as drawn: cover · title · controls · lyrics
+            var g = new Grid { Margin = new Thickness(32, 14, 32, 18) };
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); g.RowDefinitions.Add(new RowDefinition());
-            // top
             var top = new Grid();
             var down = Ui.IconButton("down", 42, 24, Ui.TEXT, Colors.Transparent, CloseNP, "Свернуть (Esc)"); down.HorizontalAlignment = HorizontalAlignment.Left; top.Children.Add(down);
             npSrc = Ui.Text("", 12, Ui.MUTED, true); npSrc.HorizontalAlignment = HorizontalAlignment.Center; npSrc.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(npSrc);
-            var more = Ui.IconButton("dots", 42, 22, Ui.TEXT, Colors.Transparent, () => { if (P.Cur != null) TrackMenu(P.Cur, null); }, "Ещё"); more.HorizontalAlignment = HorizontalAlignment.Right; top.Children.Add(more);
+            var tools = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            tools.Children.Add(Ui.IconButton("plus", 40, 20, Ui.TEXT, Colors.Transparent, () => { if (P.Cur != null) AddToPlaylist(P.Cur); }, "В плейлист"));
+            npShuffle = Ui.IconButton("shuffle", 40, 20, Ui.TEXT, Colors.Transparent, ToggleShuffle, "Перемешать"); tools.Children.Add(npShuffle);
+            npRepeat = Ui.IconButton("repeat", 40, 20, Ui.TEXT, Colors.Transparent, CycleRepeat, "Повтор"); tools.Children.Add(npRepeat);
+            tabLy = Ui.Pill(null, false, () => SetPane("lyrics"), "lyrics"); tabLy.ToolTip = "Текст"; tabLy.Margin = new Thickness(8, 0, 0, 0); tools.Children.Add(tabLy);
+            tabQ = Ui.Pill(null, false, () => SetPane("queue"), "queue"); tabQ.ToolTip = "Очередь"; tabQ.Margin = new Thickness(6, 0, 6, 0); tools.Children.Add(tabQ);
+            tools.Children.Add(Ui.IconButton("dots", 40, 22, Ui.TEXT, Colors.Transparent, () => { if (P.Cur != null) TrackMenu(P.Cur, null); }, "Ещё"));
+            top.Children.Add(tools);
             g.Children.Add(top);
-            // body: left player, right lyrics / queue
-            var body = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.9, GridUnitType.Star), MaxWidth = 520 });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
-            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.25, GridUnitType.Star) });
-            Grid.SetRow(body, 1); g.Children.Add(body);
-            var left = new Grid();
-            left.RowDefinitions.Add(new RowDefinition()); left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            npArt = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.S2), HorizontalAlignment = HorizontalAlignment.Stretch, Effect = new DropShadowEffect { BlurRadius = 50, ShadowDepth = 14, Opacity = 0.5 } };
-            var artBox = new Grid();
-            // the cover flips over: the back side tells about the track
-            flipBox = new Grid { RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1), Cursor = Cursors.Hand, ToolTip = "Нажмите — обложка перевернётся: исполнители, альбом, год" };
-            npBack = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.A(Ui.SURF, 0xF0)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Padding = new Thickness(22, 18, 22, 18) };
+
+            var col = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            col.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.05, GridUnitType.Star) });
+            col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            col.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            col.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 150 });
+            Grid.SetRow(col, 1); g.Children.Add(col);
+            // cover (click: it flips and tells about the track)
+            npArt = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.S2), Effect = new DropShadowEffect { BlurRadius = 50, ShadowDepth = 14, Opacity = 0.5 } };
+            var artBox = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+            flipBox = new Grid { RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1), Cursor = Cursors.Hand, ToolTip = "Нажмите — обложка перевернётся: исполнители, альбом, год", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            npBack = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.A(Ui.SURF, 0xF0)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Padding = new Thickness(20, 16, 20, 16) };
             flipBox.Children.Add(npArt); flipBox.Children.Add(npBack);
             artBox.Children.Add(flipBox);
             flipBox.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) FlipCover(); };
-            artBox.SizeChanged += (s, e) => { double side = Math.Max(120, Math.Min(e.NewSize.Width, e.NewSize.Height)); npArt.Width = side; npArt.Height = side; npBack.Width = side; npBack.Height = side; };
-            left.Children.Add(artBox);
-            var ctrls = new StackPanel { Margin = new Thickness(0, 22, 0, 0) };
-            var mg = new Grid(); mg.ColumnDefinitions.Add(new ColumnDefinition()); mg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var mt = new StackPanel();
-            npTitle = Ui.Text("", 26, Ui.TEXT, true, true); npTitle.FontWeight = FontWeights.Bold;
-            npArtist = Ui.Text("", 15, Ui.MUTED); npArtist.Margin = new Thickness(0, 4, 0, 8); npArtist.Cursor = Cursors.Hand; npArtist.ToolTip = "Открыть страницу исполнителя";
+            artBox.SizeChanged += (s, e) => { double side = Math.Max(110, Math.Min(460, Math.Min(e.NewSize.Width, e.NewSize.Height))); npArt.Width = side; npArt.Height = side; npBack.Width = Math.Max(side, 300); npBack.Height = side; };
+            col.Children.Add(artBox);
+            // title, artist with subscribe, seek bar
+            var info = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 18, 0, 0), MaxWidth = 720 };
+            npTitle = Ui.Text("", 26, Ui.TEXT, true, true); npTitle.FontWeight = FontWeights.Bold; npTitle.HorizontalAlignment = HorizontalAlignment.Center; npTitle.TextAlignment = TextAlignment.Center;
+            info.Children.Add(npTitle);
+            var who = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+            npBadgeHost = new Border { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }; who.Children.Add(npBadgeHost);
+            npArtist = Ui.Text("", 15, Ui.MUTED); npArtist.VerticalAlignment = VerticalAlignment.Center; npArtist.Cursor = Cursors.Hand; npArtist.ToolTip = "Открыть страницу исполнителя"; npArtist.MaxWidth = 420;
             npArtist.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) { CloseNP(); OpenArtistFor(P.Cur); } };
             npArtist.MouseEnter += (s, e) => npArtist.TextDecorations = TextDecorations.Underline; npArtist.MouseLeave += (s, e) => npArtist.TextDecorations = null;
-            npBadgeHost = new Border { HorizontalAlignment = HorizontalAlignment.Left };
-            mt.Children.Add(npTitle); mt.Children.Add(npArtist); mt.Children.Add(npBadgeHost);
-            mg.Children.Add(mt);
-            var acts = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            acts.Children.Add(Ui.IconButton("plus", 44, 21, Ui.TEXT, Ui.A(Colors.White, 0x1C), () => { if (P.Cur != null) AddToPlaylist(P.Cur); }, "В плейлист"));
-            npLike = Ui.IconButton("heartLine", 44, 21, Ui.TEXT, Ui.A(Colors.White, 0x1C), Like, "Нравится"); npLike.Margin = new Thickness(8, 0, 0, 0); acts.Children.Add(npLike);
-            npDislike = Ui.IconButton("broken", 44, 21, Ui.TEXT, Ui.A(Colors.White, 0x1C), () => Dislike(P.Cur), "Не предлагать"); npDislike.Margin = new Thickness(8, 0, 0, 0); acts.Children.Add(npDislike);
-            Grid.SetColumn(acts, 1); mg.Children.Add(acts);
-            ctrls.Children.Add(mg);
-            npSeek = new SeekBar(5, Ui.A(Colors.White, 0x38), Ui.TEXT) { Margin = new Thickness(0, 16, 0, 0) }; npSeek.Seeked += v => { if (P.Dur > 0) P.Seek(v * P.Dur); lyLast = -2; };
-            ctrls.Children.Add(npSeek);
-            var times = new Grid(); npCur = Ui.Text("0:00", 12, Ui.MUTED); npDur = Ui.Text("0:00", 12, Ui.MUTED); npDur.HorizontalAlignment = HorizontalAlignment.Right; times.Children.Add(npCur); times.Children.Add(npDur);
-            ctrls.Children.Add(times);
-            var cg = new Grid { Margin = new Thickness(0, 14, 0, 0) };
-            for (int i = 0; i < 5; i++) cg.ColumnDefinitions.Add(new ColumnDefinition());
-            npShuffle = Ui.IconButton("shuffle", 46, 23, Ui.TEXT, Colors.Transparent, ToggleShuffle, "Перемешать");
+            who.Children.Add(npArtist);
+            npFollowHost = new Border { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) }; who.Children.Add(npFollowHost);
+            info.Children.Add(who);
+            var sk = new Grid { Width = 560, Margin = new Thickness(0, 14, 0, 0) };
+            sk.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) }); sk.ColumnDefinitions.Add(new ColumnDefinition()); sk.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
+            npCur = Ui.Text("0:00", 12, Ui.MUTED); npCur.VerticalAlignment = VerticalAlignment.Center; sk.Children.Add(npCur);
+            npSeek = new SeekBar(5, Ui.A(Colors.White, 0x38), Ui.TEXT); npSeek.Seeked += v => { if (P.Dur > 0) P.Seek(v * P.Dur); lyLast = -2; }; Grid.SetColumn(npSeek, 1); sk.Children.Add(npSeek);
+            npDur = Ui.Text("0:00", 12, Ui.MUTED); npDur.VerticalAlignment = VerticalAlignment.Center; npDur.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(npDur, 2); sk.Children.Add(npDur);
+            info.Children.Add(sk);
+            Grid.SetRow(info, 1); col.Children.Add(info);
+            // 💔  ←  ⏸  →  ♡
+            var ctl = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) };
+            npDislike = Ui.IconButton("broken", 50, 25, Ui.TEXT, Colors.Transparent, () => Dislike(P.Cur), "Не нравится — больше не предлагать");
             npPlay = Ui.IconButton("play", 72, 32, Ui.OnFill, Ui.Fill, () => P.Toggle(), "Пауза / играть (пробел)");
-            npRepeat = Ui.IconButton("repeat", 46, 23, Ui.TEXT, Colors.Transparent, CycleRepeat, "Повтор");
-            var cs = new[] { npShuffle, Ui.IconButton("prev", 54, 28, Ui.TEXT, Colors.Transparent, () => P.Prev(), "Назад"), npPlay, Ui.IconButton("next", 54, 28, Ui.TEXT, Colors.Transparent, () => P.Next(false), "Дальше"), npRepeat };
-            for (int i = 0; i < cs.Length; i++) { Grid.SetColumn(cs[i], i); cg.Children.Add(cs[i]); }
-            ctrls.Children.Add(cg);
-            var panes = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 16, 0, 0) };
-            tabLy = Ui.Pill("Текст", false, () => SetPane("lyrics"), "lyrics"); tabQ = Ui.Pill("Очередь", false, () => SetPane("queue"), "queue"); tabQ.Margin = new Thickness(10, 0, 0, 0);
-            panes.Children.Add(tabLy); panes.Children.Add(tabQ);
-            ctrls.Children.Add(panes);
-            Grid.SetRow(ctrls, 1); left.Children.Add(ctrls);
-            body.Children.Add(left);
-            // right pane
-            npMid = new Grid(); Grid.SetColumn(npMid, 2); body.Children.Add(npMid);
-            lyBox = new Grid { ClipToBounds = true, Margin = new Thickness(0, 0, 0, 56) };
+            npLike = Ui.IconButton("heartLine", 50, 25, Ui.TEXT, Colors.Transparent, Like, "Нравится");
+            foreach (var b in new[] { npDislike, Ui.IconButton("prev", 56, 30, Ui.TEXT, Colors.Transparent, () => P.Prev(), "Назад"), npPlay, Ui.IconButton("next", 56, 30, Ui.TEXT, Colors.Transparent, () => P.Next(false), "Дальше"), npLike }) { b.Margin = new Thickness(12, 0, 12, 0); b.VerticalAlignment = VerticalAlignment.Center; ctl.Children.Add(b); }
+            Grid.SetRow(ctl, 2); col.Children.Add(ctl);
+            // lyrics in a frame (or the queue)
+            var frame = new Border { Margin = new Thickness(0, 16, 0, 0), MaxWidth = 980, CornerRadius = Ui.CR(22), Background = Ui.Br(Ui.A(Colors.Black, 0x30)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x1C)), BorderThickness = new Thickness(1), Padding = new Thickness(20, 10, 20, 8) };
+            npMid = new Grid(); frame.Child = npMid;
+            Grid.SetRow(frame, 3); col.Children.Add(frame);
+            lyBox = new Grid { ClipToBounds = true, Margin = new Thickness(0, 0, 0, 34) };
             lyBox.SizeChanged += (s, e) => { lyLast = -2; lyManual = DateTime.MinValue; };
             lyPanel = new StackPanel { RenderTransform = lyShift, VerticalAlignment = VerticalAlignment.Top };
             var lyCanvas = new Canvas(); lyCanvas.Children.Add(lyPanel); lyBox.Children.Add(lyCanvas);
@@ -159,7 +159,7 @@ namespace YouPlay
             lyBox.PreviewMouseWheel += (s, e) => { lyManual = DateTime.Now; var y = lyShift.Y + e.Delta * 0.6; lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = ClampShift(y); e.Handled = true; };
             npMid.Children.Add(lyBox);
             var lyFoot = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
-            lySrc = Ui.Text("", 11.5, Ui.FAINT); lySrc.VerticalAlignment = VerticalAlignment.Center; lyFoot.Children.Add(lySrc);
+            lySrc = Ui.Text("", 11, Ui.FAINT); lySrc.VerticalAlignment = VerticalAlignment.Center; lyFoot.Children.Add(lySrc);
             var off = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             lyOffText = Ui.Text("синхр.", 12, Ui.TEXT, true);
             off.Children.Add(SmallChip("−0,5 с", () => Nudge(-0.5))); off.Children.Add(SmallChipEl(lyOffText, () => Nudge(0))); off.Children.Add(SmallChip("+0,5 с", () => Nudge(0.5)));
@@ -171,7 +171,7 @@ namespace YouPlay
             L.RenderTransform = new TranslateTransform();
             return L;
         }
-        TextBlock lyOffText; DateTime lyManual = DateTime.MinValue;
+        TextBlock lyOffText; DateTime lyManual = DateTime.MinValue; Border npFollowHost;
         static string Norm(string s) { return Regex.Replace((s ?? "").ToLowerInvariant(), @"[^\p{L}\p{N}]", ""); }
         Grid flipBox; Border npBack; bool flipped, flipping; string backFor;
         void FlipCover()
@@ -194,7 +194,7 @@ namespace YouPlay
         }
         void UnflipCover() { if (flipped && !flipping) FlipCover(); backFor = null; }
         readonly System.Diagnostics.Stopwatch lyClock = System.Diagnostics.Stopwatch.StartNew(); double lyPrev = -1;
-        double ClampShift(double y) { double h = lyBox.ActualHeight, ph = lyPanel.ActualHeight; if (h <= 0) return y; return Math.Max(Math.Min(h * 0.45, -ph + h * 0.45), Math.Min(h * 0.45, y)); }
+        double ClampShift(double y) { double h = lyBox.ActualHeight, ph = lyPanel.ActualHeight; if (h <= 0) return y; return Math.Max(Math.Min(h * 0.5, -ph + h * 0.5), Math.Min(h * 0.5, y)); }
 
         // ── backdrop: the cover blurred once into a small bitmap (no live blur, so lyrics stay smooth) ──
         void SetBackdrop(string url)
@@ -355,7 +355,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             Ui.SetIcon(bShuffle, "shuffle", P.Shuffle ? Ui.Accent : Ui.MUTED);
             Ui.SetIcon(bRepeat, P.Repeat == 2 ? "repeat1" : "repeat", P.Repeat > 0 ? Ui.Accent : Ui.MUTED);
             if (t == null) return;
-            npTitle.Text = t.Title; npArtist.Text = t.Artist; npBadgeHost.Child = Ui.Badge(t.Src, t.Kind);
+            npTitle.Text = t.Title; npArtist.Text = t.Artist; npBadgeHost.Child = Ui.Badge(t.Src, t.Kind); PaintFollow();
             npSrc.Text = (P.Name.Length > 0 ? P.Name : "Сейчас играет").ToUpperInvariant();
             Ui.SetIcon(npPlay, P.Playing ? "pause" : "play", Ui.OnFill);
             Ui.SetIcon(npLike, l ? "heart" : "heartLine", l ? Ui.Accent : Ui.TEXT);
@@ -404,7 +404,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
         int lyReq, lyLast = -2; double lyDur, smooth; bool lyTempo; DateTime lyFrame = DateTime.MinValue;
         static readonly Regex TEMPO = new Regex("(slowed|sped|speed up|nightcore|daycore)", RegexOptions.IgnoreCase);
         static string Clean(string t) { t = Regex.Replace(t, @"\s*[(\[][^)\]]*(slowed|sped|reverb|nightcore|official|video|audio|lyric|mv|remaster|hd|hq|клип)[^)\]]*[)\]]", "", RegexOptions.IgnoreCase); return Regex.Replace(t, @"\s*-\s*(official|lyric).*$", "", RegexOptions.IgnoreCase).Trim(); }
-        void LyMsg(string s) { lyPanel.Children.Clear(); ly.Clear(); lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = 120; var t = Ui.Wrap(s, 20, Ui.MUTED, true); lyPanel.Children.Add(t); }
+        void LyMsg(string s) { lyPanel.Children.Clear(); ly.Clear(); lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = 120; var t = Ui.Wrap(s, 18, Ui.MUTED, true); t.TextAlignment = TextAlignment.Center; t.Margin = new Thickness(0, 0, 0, 0); lyPanel.Children.Add(t); }
         async void LoadLyrics(Track it)
         {
             int my = ++lyReq; lyLast = -2; lyDur = 0; lySrc.Text = ""; PaintOffset();
@@ -496,7 +496,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
                     double span = Math.Max(0.6, (end - l.T) * 0.85), total = words.Sum(w => w.Length + 1.5);
                     double at = l.T;
                     for (int k = 0; k < words.Length; k++) { double d = span * (words[k].Length + 1.5) / Math.Max(1, total); l.Ws[k] = at; l.We[k] = at + d; at += d; }
-                    var tb = new TextBlock { FontSize = 34, FontWeight = FontWeights.Bold, FontFamily = Ui.Display, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 24, 22), Foreground = Ui.Br(Ui.A(Ui.TEXT, 0x55)), Cursor = Cursors.Hand, RenderTransformOrigin = new Point(0, 0.5), RenderTransform = new ScaleTransform(1, 1) };
+                    var tb = new TextBlock { FontSize = 27, FontWeight = FontWeights.Bold, FontFamily = Ui.Display, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(10, 0, 10, 14), Foreground = Ui.Br(Ui.A(Ui.TEXT, 0x55)), Cursor = Cursors.Hand, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1) };
                     l.Runs = new List<Run>();
                     if (words.Length == 0) tb.Inlines.Add(new Run("♪"));
                     for (int k = 0; k < words.Length; k++) { var r = new Run(words[k]); l.Runs.Add(r); tb.Inlines.Add(r); if (k < words.Length - 1) tb.Inlines.Add(new Run(" ")); }
@@ -509,7 +509,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             }
             else if (plain.Length > 0)
             {
-                var tb = Ui.Wrap(plain.Replace("\r", ""), 22, Ui.TEXT, true); tb.LineHeight = 34; lyPanel.Children.Add(tb);
+                var tb = Ui.Wrap(plain.Replace("\r", ""), 19, Ui.TEXT, true); tb.LineHeight = 30; tb.TextAlignment = TextAlignment.Center; lyPanel.Children.Add(tb);
                 lyShift.BeginAnimation(TranslateTransform.YProperty, null); lyShift.Y = 20;
                 lySrc.Text = "Синхронного текста нет — показан обычный (" + (ytm ? "YouTube Music" : J.S(res, "via").Length > 0 ? J.S(res, "via") : "LRCLIB") + "). Прокрутка колёсиком.";
             }
@@ -555,7 +555,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
                     if ((DateTime.Now - lyManual).TotalSeconds > 4)
                     {
                         var p = v.TranslatePoint(new Point(0, 0), lyPanel);
-                        double target = ClampShift(lyBox.ActualHeight * 0.38 - p.Y - v.ActualHeight / 2);
+                        double target = ClampShift(lyBox.ActualHeight * 0.5 - p.Y - v.ActualHeight / 2);
                         lyShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(target, TimeSpan.FromMilliseconds(650)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
                     }
                 }
