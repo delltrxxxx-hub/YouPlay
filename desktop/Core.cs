@@ -47,7 +47,8 @@ namespace YouPlay
                     return;
                 }
                 Directory.CreateDirectory(Data);
-                Updater.Enabled = Array.IndexOf(args, "--no-update") < 0;
+                // --no-update only switches updates off in a separate test copy (own YOUPLAY_DATA_DIR), never in a normal install
+                Updater.Enabled = !(Array.IndexOf(args, "--no-update") >= 0 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("YOUPLAY_DATA_DIR")));
                 var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
                 app.DispatcherUnhandledException += (s, e) => { try { File.AppendAllText(Path.Combine(Data, "errors.log"), DateTime.Now + " " + e.Exception + "\r\n"); } catch { } e.Handled = true; };
                 var w = new MainWindow();
@@ -201,9 +202,9 @@ namespace YouPlay
         public static string State = "idle";
         public static string LatestTag, LatestUrl;
         public static int Percent;
-        public static void Check()
+        public static void Check(bool manual = false)
         {
-            if (!Enabled) { State = "dev"; return; }
+            if (!Enabled && !manual) { State = "dev"; return; }
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
             using (var wc = new WebClient())
             {

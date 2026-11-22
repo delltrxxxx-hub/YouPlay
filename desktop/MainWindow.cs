@@ -715,7 +715,7 @@ namespace YouPlay
             body.Children.Add(AccRow("broken", Ui.MUTED, "Скрытые треки", nd == 0 ? "Пока нет" : nd + " тр. — YouPlay их пропускает", nd > 0 ? "Очистить" : null, () => { Store.SetList("disliked", new List<Dictionary<string, object>>()); ShowTab("settings"); Toast("Список очищен"); }));
             body.Children.Add(SetTitle("Приложение"));
             updLine = Ui.Text(UpdText(), 13, Ui.MUTED);
-            body.Children.Add(AccRowEl("update", Ui.Accent, "YouPlay " + Program.Version, updLine, "Проверить", () => { Updater.State = "checking"; OnUpdateState(); Task.Run(() => { try { Updater.Check(); } catch { Updater.State = "error"; } Dispatcher.BeginInvoke((Action)OnUpdateState); }); }));
+            body.Children.Add(AccRowEl("update", Ui.Accent, "YouPlay " + Program.Version, updLine, "Проверить", () => { Updater.State = "checking"; updAsked = false; OnUpdateState(); Task.Run(() => { try { Updater.Check(true); } catch { Updater.State = "error"; } Dispatcher.BeginInvoke((Action)OnUpdateState); }); }));
             return Ui.Scroll(body);
         }
         async void CheckSc() { var d = await E.Soundcloud("status", ""); scChecked = true; scLogin = J.B(d, "login"); scUser = J.S(d, "user"); if (tab == "settings" && stack.Count == 1) ShowTab("settings"); }
