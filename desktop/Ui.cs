@@ -16,8 +16,12 @@ namespace YouPlay
         public static Color BG = C(0x120D0B), SURF = C(0x1C1512), S2 = C(0x2A221E), S3 = C(0x3A302B), TEXT = C(0xF4EEEA), MUTED = C(0xA79B94), FAINT = C(0x6E625C);
         public static Color YT = C(0xFF4E45), SC = C(0xFF7A1A), LOCAL = C(0x2BC48A);
         public static Color Accent = C(0xFF5A36);
-        public static readonly FontFamily Font = new FontFamily("Segoe UI Variable Text, Segoe UI");
-        public static readonly FontFamily Display = new FontFamily("Segoe UI Variable Display, Segoe UI");
+        public static FontFamily Font = new FontFamily("Segoe UI Variable Text, Segoe UI");
+        public static FontFamily Display = new FontFamily("Segoe UI Variable Display, Segoe UI");
+        // theme shape: corner scale (Holo: square), filled buttons, selected navigation
+        public static double Round = 1; public static bool Square;
+        public static Color Fill = C(0xF4EEEA), OnFill = C(0x111111), NavOn = C(0x2A221E);
+        public static CornerRadius CR(double r) { return new CornerRadius(Square ? Math.Min(r, 3) : r * Round); }
         public static Color C(int rgb) { return Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb); }
         public static Color A(Color c, byte a) { return Color.FromArgb(a, c.R, c.G, c.B); }
         public static SolidColorBrush Br(Color c) { var b = new SolidColorBrush(c); return b; }
@@ -76,7 +80,7 @@ namespace YouPlay
         /// <summary>Round icon button.</summary>
         public static Border IconButton(string icon, double box, double iconSize, Color iconColor, Color bg, Action onClick, string tip = null)
         {
-            var b = new Border { Width = box, Height = box, CornerRadius = new CornerRadius(box / 2), Background = Br(bg), Child = Icon(icon, iconSize, iconColor), ToolTip = tip };
+            var b = new Border { Width = box, Height = box, CornerRadius = Ui.CR(box / 2), Background = Br(bg), Child = Icon(icon, iconSize, iconColor), ToolTip = tip };
             var hover = bg.A == 0 ? A(Colors.White, 0x1A) : Lighten(bg, 0.12);
             return Click(b, onClick, hover);
         }
@@ -88,30 +92,30 @@ namespace YouPlay
         public static Border Pill(string label, bool filled, Action onClick, string icon = null)
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            Color fg = filled ? C(0x111111) : TEXT;
+            Color fg = filled ? OnFill : TEXT;
             if (icon != null) { var ic = Icon(icon, 17, fg); ic.Margin = new Thickness(0, 0, label == null ? 0 : 8, 0); sp.Children.Add(ic); }
             if (label != null) sp.Children.Add(Text(label, 13.5, fg, true));
-            var b = new Border { Height = 40, Padding = new Thickness(label == null ? 11 : 18, 0, label == null ? 11 : 18, 0), CornerRadius = new CornerRadius(20), Background = Br(filled ? TEXT : S2), Child = sp };
-            return Click(b, onClick, filled ? C(0xFFFFFF) : S3);
+            var b = new Border { Height = 40, Padding = new Thickness(label == null ? 11 : 18, 0, label == null ? 11 : 18, 0), CornerRadius = Ui.CR(20), Background = Br(filled ? Fill : S2), Child = sp };
+            return Click(b, onClick, filled ? Lighten(Fill, 0.15) : S3);
         }
         public static Border Chip(string label, bool on, Action onClick)
         {
-            var b = new Border { Height = 32, Padding = new Thickness(14, 0, 14, 0), CornerRadius = new CornerRadius(16), Background = Br(on ? TEXT : S2), Margin = new Thickness(0, 0, 8, 0), Child = Text(label, 12.5, on ? C(0x111111) : MUTED, true) };
+            var b = new Border { Height = 32, Padding = new Thickness(14, 0, 14, 0), CornerRadius = Ui.CR(16), Background = Br(on ? Fill : S2), Margin = new Thickness(0, 0, 8, 0), Child = Text(label, 12.5, on ? OnFill : MUTED, true) };
             ((TextBlock)b.Child).VerticalAlignment = VerticalAlignment.Center;
-            return Click(b, onClick, on ? TEXT : S3);
+            return Click(b, onClick, on ? Fill : S3);
         }
         public static Border Badge(string src, string kind = null)
         {
             var c = SrcColor(src);
             string label = src == "sc" ? "SoundCloud" : src == "local" ? "Файл" : kind == "video" ? "Клип" : "YouTube";
-            return new Border { CornerRadius = new CornerRadius(5), Background = Br(A(c, 0x30)), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center, Child = Text(label, 10.5, c, true) };
+            return new Border { CornerRadius = Ui.CR(5), Background = Br(A(c, 0x30)), Padding = new Thickness(6, 1, 6, 2), VerticalAlignment = VerticalAlignment.Center, Child = Text(label, 10.5, c, true) };
         }
 
         // ── images ──
         static readonly Dictionary<string, BitmapImage> cache = new Dictionary<string, BitmapImage>();
         public static Border Cover(string url, double w, double h, double radius, string fallbackIcon = "music")
         {
-            var b = new Border { Width = w, Height = h, CornerRadius = new CornerRadius(radius), Background = Br(S2), ClipToBounds = true };
+            var b = new Border { Width = w, Height = h, CornerRadius = Ui.CR(radius), Background = Br(S2), ClipToBounds = true };
             Load(b, url, (int)Math.Max(w, h), fallbackIcon);
             return b;
         }
@@ -185,9 +189,9 @@ namespace YouPlay
         public SeekBar(double height, Color track, Color fg)
         {
             Height = 18; Background = Brushes.Transparent; Cursor = Cursors.Hand;
-            var tr = new Border { Height = height, CornerRadius = new CornerRadius(height / 2), Background = Ui.Br(track), VerticalAlignment = VerticalAlignment.Center };
-            fill = new Border { Height = height, CornerRadius = new CornerRadius(height / 2), Background = Ui.Br(fg), VerticalAlignment = VerticalAlignment.Center, RenderTransform = scale, RenderTransformOrigin = new Point(0, 0.5) };
-            knob = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(6.5), Background = Ui.Br(Colors.White), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Opacity = 0, IsHitTestVisible = false };
+            var tr = new Border { Height = height, CornerRadius = Ui.CR(height / 2), Background = Ui.Br(track), VerticalAlignment = VerticalAlignment.Center };
+            fill = new Border { Height = height, CornerRadius = Ui.CR(height / 2), Background = Ui.Br(fg), VerticalAlignment = VerticalAlignment.Center, RenderTransform = scale, RenderTransformOrigin = new Point(0, 0.5) };
+            knob = new Border { Width = 13, Height = 13, CornerRadius = Ui.CR(6.5), Background = Ui.Br(Colors.White), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Opacity = 0, IsHitTestVisible = false };
             Children.Add(tr); Children.Add(fill); Children.Add(knob);
             MouseEnter += (s, e) => Ui.Fade(knob, 1, 120);
             MouseLeave += (s, e) => { if (!Dragging) Ui.Fade(knob, 0, 200); };

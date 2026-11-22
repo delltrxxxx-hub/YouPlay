@@ -22,7 +22,7 @@ namespace YouPlay
         // ═════════ dialogs ═════════
         Border OpenDialog(FrameworkElement content, double width = 460)
         {
-            var card = new Border { Width = width, MaxHeight = Math.Max(300, ActualHeight - 80), Padding = new Thickness(24, 22, 24, 22), CornerRadius = new CornerRadius(22), Background = Ui.Br(Ui.SURF), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x14)), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = content, Effect = new DropShadowEffect { BlurRadius = 60, ShadowDepth = 18, Opacity = 0.55 } };
+            var card = new Border { Width = width, MaxHeight = Math.Max(300, ActualHeight - 80), Padding = new Thickness(24, 22, 24, 22), CornerRadius = Ui.CR(22), Background = Ui.Br(Ui.SURF), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x14)), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Child = content, Effect = new DropShadowEffect { BlurRadius = 60, ShadowDepth = 18, Opacity = 0.55 } };
             card.MouseLeftButtonDown += (s, e) => e.Handled = true;
             dialogLayer.Children.Clear(); dialogLayer.Children.Add(card);
             dialogLayer.Visibility = Visibility.Visible; dialogLayer.Opacity = 0; Ui.Fade(dialogLayer, 1, 160);
@@ -43,7 +43,7 @@ namespace YouPlay
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             sp.Children.Add(Ui.Icon(icon, 21, Ui.MUTED)); var t = Ui.Text(label, 14.5, Ui.TEXT, true); t.Margin = new Thickness(16, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; sp.Children.Add(t);
-            return Ui.Click(new Border { Height = 48, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(12), Background = Ui.Br(Colors.Transparent), Child = sp }, a, Ui.A(Colors.White, 0x10));
+            return Ui.Click(new Border { Height = 48, Padding = new Thickness(12, 0, 12, 0), CornerRadius = Ui.CR(12), Background = Ui.Br(Colors.Transparent), Child = sp }, a, Ui.A(Colors.White, 0x10));
         }
         FrameworkElement TrackHead(Track t)
         {
@@ -90,7 +90,7 @@ namespace YouPlay
             h.Visibility = tb.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             tb.TextChanged += (s, e) => h.Visibility = tb.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             var g = new Grid(); g.Children.Add(h); g.Children.Add(tb);
-            var b = new Border { Height = 48, Padding = new Thickness(14, 0, 14, 0), CornerRadius = new CornerRadius(14), Background = Ui.Br(Ui.S2), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x14)), BorderThickness = new Thickness(1), Child = g };
+            var b = new Border { Height = 48, Padding = new Thickness(14, 0, 14, 0), CornerRadius = Ui.CR(14), Background = Ui.Br(Ui.S2), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x14)), BorderThickness = new Thickness(1), Child = g };
             tb.GotFocus += (s, e) => b.BorderBrush = Ui.Br(Ui.Accent); tb.LostFocus += (s, e) => b.BorderBrush = Ui.Br(Ui.A(Colors.White, 0x14));
             return Tuple.Create(b, tb);
         }
@@ -112,13 +112,13 @@ namespace YouPlay
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Border pc;
             if (!string.IsNullOrEmpty(art) && art.StartsWith("http")) pc = Ui.Cover(art, 46, 46, 10);
-            else { pc = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(10), Background = Ui.Br(Ui.S3) }; var ic = Ui.Icon(icon, 22, iconColor); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center; pc.Child = ic; }
+            else { pc = new Border { Width = 46, Height = 46, CornerRadius = Ui.CR(10), Background = Ui.Br(Ui.S3) }; var ic = Ui.Icon(icon, 22, iconColor); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center; pc.Child = ic; }
             g.Children.Add(pc);
             var m = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
             m.Children.Add(Ui.Text(title, 14.5, Ui.TEXT, true)); var s = Ui.Wrap(sub, 12, Ui.MUTED); s.Margin = new Thickness(0, 3, 0, 0); m.Children.Add(s);
             Grid.SetColumn(m, 1); g.Children.Add(m);
             if (check) { var c = Ui.Icon("check", 20, Ui.Accent); c.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(c, 2); g.Children.Add(c); }
-            var b = new Border { Child = g, Padding = new Thickness(10, 8, 12, 8), CornerRadius = new CornerRadius(14), Background = Ui.Br(Ui.S2), Margin = new Thickness(0, 0, 0, 8), BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent };
+            var b = new Border { Child = g, Padding = new Thickness(10, 8, 12, 8), CornerRadius = Ui.CR(14), Background = Ui.Br(Ui.S2), Margin = new Thickness(0, 0, 0, 8), BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent };
             return a == null ? b : Ui.Click(b, a, Ui.S3);
         }
         async void AddToPlaylist(Track t)
@@ -231,9 +231,9 @@ namespace YouPlay
             var t = Ui.Text("Эквалайзер", 22, Ui.TEXT, true, true); t.FontWeight = FontWeights.Bold; t.VerticalAlignment = VerticalAlignment.Center; head.Children.Add(t);
             var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             bool on = Store.Bool("eqOn", false);
-            var knob = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3, 0, 0, 0), RenderTransform = new TranslateTransform(on ? 20 : 0, 0) };
+            var knob = new Border { Width = 22, Height = 22, CornerRadius = Ui.CR(11), Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3, 0, 0, 0), RenderTransform = new TranslateTransform(on ? 20 : 0, 0) };
             var trackBg = new SolidColorBrush(on ? Ui.Accent : Ui.S3);
-            var sw = new Border { Width = 48, Height = 28, CornerRadius = new CornerRadius(14), Background = trackBg, Child = knob, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
+            var sw = new Border { Width = 48, Height = 28, CornerRadius = Ui.CR(14), Background = trackBg, Child = knob, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
             right.Children.Add(sw);
             right.Children.Add(Ui.IconButton("close", 34, 18, Ui.MUTED, Colors.Transparent, CloseDialog, "Закрыть"));
             head.Children.Add(right);
@@ -290,7 +290,7 @@ namespace YouPlay
         // ═════════ toast ═════════
         void Toast(string s)
         {
-            var b = new Border { Padding = new Thickness(18, 12, 18, 12), CornerRadius = new CornerRadius(14), Background = Ui.Br(Ui.C(0x322A26)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, bar.Visibility == Visibility.Visible && !npOpen ? 110 : 34), Child = Ui.Text(s, 14, Ui.TEXT, true), Effect = new DropShadowEffect { BlurRadius = 30, ShadowDepth = 8, Opacity = 0.45 } };
+            var b = new Border { Padding = new Thickness(18, 12, 18, 12), CornerRadius = Ui.CR(14), Background = Ui.Br(Ui.C(0x322A26)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, bar.Visibility == Visibility.Visible && !npOpen ? 110 : 34), Child = Ui.Text(s, 14, Ui.TEXT, true), Effect = new DropShadowEffect { BlurRadius = 30, ShadowDepth = 8, Opacity = 0.45 } };
             toastLayer.Children.Clear(); toastLayer.Children.Add(b);
             var tt = new TranslateTransform(0, 14); b.RenderTransform = tt; b.Opacity = 0;
             Ui.Fade(b, 1, 180); tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(240)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
@@ -326,8 +326,8 @@ namespace YouPlay
                 var ic = Ui.Icon("update", 36, Ui.Accent); ic.HorizontalAlignment = HorizontalAlignment.Left; sp.Children.Add(ic);
                 var h = Ui.Text("Вышло обновление YouPlay", 22, Ui.TEXT, true, true); h.FontWeight = FontWeights.Bold; h.Margin = new Thickness(0, 12, 0, 6); sp.Children.Add(h);
                 updProgress = Ui.Wrap("Версия " + Updater.LatestTag + " (у вас " + Program.Version + "). Вход, плейлисты и настройки сохранятся.", 14, Ui.MUTED); sp.Children.Add(updProgress);
-                var track = new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = Ui.Br(Ui.S3), Margin = new Thickness(0, 16, 0, 0) };
-                updBar = new Border { Height = 6, Width = 0, CornerRadius = new CornerRadius(3), Background = Ui.Br(Ui.Accent), HorizontalAlignment = HorizontalAlignment.Left };
+                var track = new Border { Height = 6, CornerRadius = Ui.CR(3), Background = Ui.Br(Ui.S3), Margin = new Thickness(0, 16, 0, 0) };
+                updBar = new Border { Height = 6, Width = 0, CornerRadius = Ui.CR(3), Background = Ui.Br(Ui.Accent), HorizontalAlignment = HorizontalAlignment.Left };
                 track.Child = updBar; sp.Children.Add(track);
                 var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
                 row.Children.Add(Ui.Pill("Позже", false, () => { updProgress = null; CloseDialog(); }));

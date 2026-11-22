@@ -79,10 +79,10 @@
   async function settle(match, timeout = 9000) {
     const t0 = Date.now(); let last = -1, stable = 0;
     while (Date.now() - t0 < timeout) {
-      await wait(200);
+      await wait(140);
       if (!match()) continue;
       const n = $$('ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer', pageRoot()).length;
-      if (n > 0 && n === last) { if (++stable >= 3) return true; } else stable = 0;
+      if (n > 0 && n === last) { if (++stable >= 2) return true; } else stable = 0;
       last = n;
     }
     return false;
@@ -90,8 +90,16 @@
   const pageRoot = () => $('ytmusic-browse-response:not([hidden]), ytmusic-search-page:not([hidden])') || document;
 
   // jobs that need this window to open a page run one at a time
-  let chain = Promise.resolve();
-  const job = (fn) => (chain = chain.then(fn, fn));
+  const qHigh = [], qLow = []; let busy = false;
+  const job = (fn, low) => new Promise((res) => { (low ? qLow : qHigh).push({ fn, res }); pump(); });
+  async function pump() {
+    if (busy) return;
+    const it = qHigh.shift() || qLow.shift(); if (!it) return;
+    busy = true;
+    try { it.res(await it.fn()); } catch (e) { it.res({ error: String(e && e.message || e) }); }
+    busy = false; pump();
+  }
+  const urgent = () => qHigh.length > 0;
 
   async function home() {
     nav({ browseEndpoint: { browseId: 'FEmusic_home' } });
@@ -141,7 +149,7 @@
     const ok = await settle(() => /VLLM|list=LM/.test(location.href), 12000);
     if (!ok && $('a.sign-in-link, ytmusic-nav-bar a[href*="ServiceLogin"]')) return { login: false, tracks: [] };
     let n = -1, stable = 0;
-    for (let i = 0; i < 60 && stable < 3; i++) {   // scrolling loads the rest
+    for (let i = 0; i < 60 && stable < 3 && !urgent(); i++) {   // scrolling loads the rest (stops at once when you search or open a page)
       window.scrollTo(0, document.documentElement.scrollHeight);
       await wait(600);
       const c = $$('ytmusic-playlist-shelf-renderer ytmusic-responsive-list-item-renderer').length;
@@ -400,21 +408,21 @@
     try {
       switch (cmd.cmd) {
         case 'home': reply(await job(home)); break;
-        case 'search': reply(await job(() => search(cmd.q))); break;
+        case 'search': reply(await job(() => search(cmd.q), !!cmd.low)); break;
         case 'browse': reply(await job(() => browse(cmd.href))); break;
-        case 'likes': reply(await job(likes)); break;
+        case 'likes': reply(await job(likes, true)); break;
         case 'account': reply(account()); break;
         case 'queue': reply({ items: queue() }); break;
         case 'play': play(cmd.videoId, cmd.listId); reply({ ok: true }); break;
         case 'control': control(cmd); reply({ ok: true }); break;
-        case 'playlists': reply(await job(playlists)); break;
+        case 'playlists': reply(await job(playlists, true)); break;
         case 'plAdd': reply(await job(() => plAdd(cmd))); break;
         case 'plCreate': reply(await job(() => plCreate(cmd))); break;
         case 'lyrics': reply(await lyrics(cmd)); break;
         case 'subscribe': reply(await job(() => subscribe(cmd))); break;
-        case 'artists': reply(await job(artists)); break;
+        case 'artists': reply(await job(artists, true)); break;
         case 'clip': reply(clip(cmd)); break;
-        case 'credits': reply(await job(() => credits(cmd))); break;
+        case 'credits': reply(await job(() => credits(cmd), true)); break;
         case 'audioOnly': window.__ypAudioOnly = !!cmd.value; reply({ ok: true }); break;
         default: reply({ error: 'unknown' });
       }

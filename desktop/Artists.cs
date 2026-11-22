@@ -30,7 +30,7 @@ namespace YouPlay
                 var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
                 sp.Children.Add(Ui.Cover(J.S(a, "art"), 30, 30, 15, "user"));
                 var t = Ui.Text(J.S(a, "name"), 13.5, Ui.MUTED, true); t.Margin = new Thickness(11, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; t.MaxWidth = 150; sp.Children.Add(t);
-                var b = new Border { Height = 42, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(12), Background = Ui.Br(Colors.Transparent), Child = sp };
+                var b = new Border { Height = 42, Padding = new Thickness(10, 0, 10, 0), CornerRadius = Ui.CR(12), Background = Ui.Br(Colors.Transparent), Child = sp };
                 sideArtists.Children.Add(Ui.Click(b, () => OpenArtist(J.S(a, "href"), J.S(a, "name"), J.S(a, "art")), Ui.A(Colors.White, 0x0C)));
             }
         }
@@ -72,7 +72,7 @@ namespace YouPlay
         {
             var host = new Grid(); Push("artist", host);
             var b0 = PageBody(); b0.Children.Add(ArtistHero(art, name ?? "", "Загружаю…", null)); host.Children.Add(Ui.Scroll(b0));
-            var d = await E.Eng("browse", "href", href);
+            var d = await Cached("browse:" + href, () => E.Eng("browse", "href", href));
             var title = J.S(d, "title"); if (title.Length == 0) title = name ?? "";
             var img = J.S(d, "art"); if (img.Length == 0) img = art;
             var tracks = Track.List(J.A(d, "tracks"), "yt").Where(t => !IsDisliked(t)).ToList();

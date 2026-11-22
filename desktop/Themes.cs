@@ -11,19 +11,21 @@ namespace YouPlay
     /// <summary>A theme: colours of the whole interface; "glass" themes use the Windows acrylic backdrop.</summary>
     class Theme
     {
-        public string Id, Name; public Color Bg, Surf, S2, S3, Text, Muted, Faint, Accent; public bool Glass;
+        public string Id, Name, Font = "Segoe UI Variable Text, Segoe UI", Display = "Segoe UI Variable Display, Segoe UI"; public Color Bg, Surf, S2, S3, Text, Muted, Faint, Accent; public bool Glass, Square, AccentFill; public double Round = 1; public Color OnAccent = Ui.C(0x111111);
         public static readonly List<Theme> All = new List<Theme> {
             new Theme { Id = "studio", Name = "Studio", Bg = Ui.C(0x120D0B), Surf = Ui.C(0x1C1512), S2 = Ui.C(0x2A221E), S3 = Ui.C(0x3A302B), Text = Ui.C(0xF4EEEA), Muted = Ui.C(0xA79B94), Faint = Ui.C(0x6E625C), Accent = Ui.C(0xFF5A36) },
             new Theme { Id = "midnight", Name = "Midnight", Bg = Ui.C(0x0B0D14), Surf = Ui.C(0x141824), S2 = Ui.C(0x1E2333), S3 = Ui.C(0x2B3146), Text = Ui.C(0xEEF1F8), Muted = Ui.C(0x9AA1B5), Faint = Ui.C(0x5E6478), Accent = Ui.C(0x4A7DFF) },
-            new Theme { Id = "glass", Name = "Liquid Glass", Glass = true, Bg = Color.FromArgb(0x70, 0x0E, 0x0C, 0x16), Surf = Color.FromArgb(0x66, 0x1C, 0x1A, 0x28), S2 = Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF), S3 = Color.FromArgb(0x3A, 0xFF, 0xFF, 0xFF), Text = Ui.C(0xFFFFFF), Muted = Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF), Faint = Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF), Accent = Ui.C(0xFF3D77) },
-            new Theme { Id = "material", Name = "Material", Bg = Ui.C(0x141218), Surf = Ui.C(0x211F26), S2 = Ui.C(0x2B2930), S3 = Ui.C(0x36343B), Text = Ui.C(0xE6E1E5), Muted = Ui.C(0xCAC4D0), Faint = Ui.C(0x79747E), Accent = Ui.C(0xD0BCFF) },
-            new Theme { Id = "holo", Name = "Android Holo", Bg = Ui.C(0x000000), Surf = Ui.C(0x101010), S2 = Ui.C(0x1B1B1B), S3 = Ui.C(0x2A2A2A), Text = Ui.C(0xFFFFFF), Muted = Ui.C(0x9E9E9E), Faint = Ui.C(0x5A5A5A), Accent = Ui.C(0x33B5E5) },
-            new Theme { Id = "aero", Name = "Windows 7 Aero", Glass = true, Bg = Color.FromArgb(0x88, 0x0D, 0x3A, 0x6B), Surf = Color.FromArgb(0x70, 0x13, 0x4A, 0x85), S2 = Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF), S3 = Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF), Text = Ui.C(0xFFFFFF), Muted = Ui.C(0xD6E6F5), Faint = Color.FromArgb(0xA0, 0xD6, 0xE6, 0xF5), Accent = Ui.C(0x8EC5F2) },
+            new Theme { Id = "glass", Name = "Liquid Glass", Glass = true, Round = 1.1, Bg = Color.FromArgb(0xC4, 0x12, 0x10, 0x1C), Surf = Color.FromArgb(0xB0, 0x1E, 0x1B, 0x2C), S2 = Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF), S3 = Color.FromArgb(0x36, 0xFF, 0xFF, 0xFF), Text = Ui.C(0xFFFFFF), Muted = Color.FromArgb(0xC8, 0xFF, 0xFF, 0xFF), Faint = Color.FromArgb(0x88, 0xFF, 0xFF, 0xFF), Accent = Ui.C(0xFF3D77) },
+            new Theme { Id = "material", Name = "Material", Round = 1.2, AccentFill = true, OnAccent = Ui.C(0x381E72), Font = "Google Sans Text, Google Sans, Roboto, Segoe UI", Display = "Google Sans Display, Google Sans, Roboto, Segoe UI", Bg = Ui.C(0x141218), Surf = Ui.C(0x211F26), S2 = Ui.C(0x2B2930), S3 = Ui.C(0x3B383E), Text = Ui.C(0xE6E1E5), Muted = Ui.C(0xCAC4D0), Faint = Ui.C(0x938F99), Accent = Ui.C(0xD0BCFF) },
+            new Theme { Id = "holo", Name = "Android Holo", Square = true, AccentFill = true, OnAccent = Ui.C(0x000000), Font = "Roboto, Segoe UI", Display = "Roboto Light, Roboto, Segoe UI Light", Bg = Ui.C(0x000000), Surf = Ui.C(0x101010), S2 = Ui.C(0x1C1C1C), S3 = Ui.C(0x2C2C2C), Text = Ui.C(0xFFFFFF), Muted = Ui.C(0xA0A0A0), Faint = Ui.C(0x5C5C5C), Accent = Ui.C(0x33B5E5) },
+            new Theme { Id = "aero", Name = "Windows 7 Aero", Glass = true, Round = 0.45, AccentFill = true, OnAccent = Ui.C(0x0B2A4A), Font = "Segoe UI", Display = "Segoe UI", Bg = Color.FromArgb(0xC8, 0x10, 0x48, 0x86), Surf = Color.FromArgb(0xB8, 0x17, 0x58, 0x9C), S2 = Color.FromArgb(0x2A, 0xFF, 0xFF, 0xFF), S3 = Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF), Text = Ui.C(0xFFFFFF), Muted = Ui.C(0xDCEBFA), Faint = Color.FromArgb(0xB0, 0xDC, 0xEB, 0xFA), Accent = Ui.C(0x9ED3FF) },
         };
         public static Theme Get(string id) { foreach (var t in All) if (t.Id == id) return t; return All[0]; }
         public void Apply()
         {
             Ui.BG = Bg; Ui.SURF = Surf; Ui.S2 = S2; Ui.S3 = S3; Ui.TEXT = Text; Ui.MUTED = Muted; Ui.FAINT = Faint;
+            Ui.Round = Round; Ui.Square = Square;
+            Ui.Font = new FontFamily(Font); Ui.Display = new FontFamily(Display);
         }
     }
 
@@ -39,6 +41,10 @@ namespace YouPlay
             theme.Apply();
             var acc = Store.Get("accent", "");
             Ui.Accent = acc.Length > 0 ? Ui.C((int)Store.Num("accent", 0)) : theme.Accent;
+            // filled buttons: the accent colour in Material / Holo / Aero, light in the others
+            Ui.Fill = theme.AccentFill ? Ui.Accent : (theme.Glass ? Colors.White : Ui.TEXT);
+            Ui.OnFill = theme.AccentFill ? (acc.Length > 0 ? Ui.C(0x111111) : theme.OnAccent) : Ui.C(0x111111);
+            Ui.NavOn = theme.Square ? Ui.A(Ui.Accent, 0x26) : theme.AccentFill ? Ui.A(Ui.Accent, 0x30) : Ui.S2;
         }
         /// <summary>Glass themes: transparent window over the Windows acrylic backdrop; others: solid window.</summary>
         void ApplyBackdrop()
@@ -67,6 +73,7 @@ namespace YouPlay
         }
         void RebuildAll()
         {
+            FontFamily = Ui.Font;
             ApplyBackdrop();
             roots.Clear(); stack.Clear();
             clipView = null; clipFor = null;

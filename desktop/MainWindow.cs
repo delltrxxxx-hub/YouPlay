@@ -38,7 +38,7 @@ namespace YouPlay
             UseLayoutRounding = true; SnapsToDevicePixels = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
             try { Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(System.IO.Path.Combine(Program.Dir, "YouPlay.exe"))); } catch { }
-            LoadTheme();
+            LoadTheme(); FontFamily = Ui.Font;
             RestoreBounds_();
             P = new Player(E) { IsDisliked = IsDisliked };
             BuildShell();
@@ -58,8 +58,21 @@ namespace YouPlay
             }
             catch { }
         }
+        public bool Online = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable();
+        void WatchNetwork()
+        {
+            System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (s, e) => Dispatcher.BeginInvoke((Action)(() =>
+            {
+                bool was = Online; Online = e.IsAvailable;
+                if (was == Online) return;
+                Toast(Online ? "Интернет снова есть" : "Нет интернета — играет «Моя музыка»");
+                if (Online) E.Reload();
+                roots.Remove("home"); roots.Remove("lib"); if (stack.Count == 1 && (tab == "home" || tab == "lib")) ShowTab(tab);
+            }));
+        }
         async Task Start()
         {
+            WatchNetwork();
             try { await E.Init(); }
             catch (Exception ex) { MessageBox.Show(this, "Не удалось запустить WebView2: " + ex.Message + "\n\nУстановите «Microsoft Edge WebView2 Runtime» с сайта Microsoft.", "YouPlay"); Close(); return; }
             E.Adblock = Store.Bool("adblock", true);
@@ -104,7 +117,7 @@ namespace YouPlay
             main.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(main, 1); top.Children.Add(main);
             var sb = new Grid();
-            var sbox = new Border { Height = 44, Width = 520, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(22), Background = Ui.Br(Ui.S2), Margin = new Thickness(28, 14, 28, 0), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x10)), BorderThickness = new Thickness(1) };
+            var sbox = new Border { Height = 44, Width = 520, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = Ui.CR(22), Background = Ui.Br(Ui.S2), Margin = new Thickness(28, 14, 28, 0), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x10)), BorderThickness = new Thickness(1) };
             var sg = new Grid(); sg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); sg.ColumnDefinitions.Add(new ColumnDefinition());
             var si = Ui.Icon("search", 19, Ui.MUTED); si.Margin = new Thickness(16, 0, 8, 0); sg.Children.Add(si);
             searchBox = new TextBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Ui.Br(Ui.TEXT), CaretBrush = Ui.Br(Ui.TEXT), FontSize = 14.5, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0), FontFamily = Ui.Font };
@@ -133,7 +146,7 @@ namespace YouPlay
         public static FrameworkElement LogoMark(double size)
         {
             var g = new Grid { Width = size, Height = size };
-            g.Children.Add(new Border { CornerRadius = new CornerRadius(size * 0.23), Background = new LinearGradientBrush(Ui.C(0x2A221E), Ui.C(0x110D0B), 90), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1) });
+            g.Children.Add(new Border { CornerRadius = Ui.CR(size * 0.23), Background = new LinearGradientBrush(Ui.C(0x2A221E), Ui.C(0x110D0B), 90), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1) });
             var cv = new Canvas { Width = 512, Height = 512 };
             var clip = Geometry.Parse("M190 150 L190 362 L374 256 Z");
             var bars = new GeometryGroup();
@@ -158,9 +171,9 @@ namespace YouPlay
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
             var ic = Ui.Icon(icon, 22, on ? Ui.Accent : Ui.MUTED); sp.Children.Add(ic);
             var tx = Ui.Text(label, 14.5, on ? Ui.TEXT : Ui.MUTED, true); tx.Margin = new Thickness(14, 0, 0, 0); tx.VerticalAlignment = VerticalAlignment.Center; sp.Children.Add(tx);
-            var b = new Border { Height = 46, Padding = new Thickness(14, 0, 14, 0), CornerRadius = new CornerRadius(12), Background = Ui.Br(on ? Ui.S2 : Colors.Transparent), Child = sp, Margin = new Thickness(0, 0, 0, 4) };
+            var b = new Border { Height = 46, Padding = new Thickness(14, 0, 14, 0), CornerRadius = Ui.CR(Ui.Square ? 0 : 12), Background = Ui.Br(on ? Ui.NavOn : Colors.Transparent), Child = sp, Margin = new Thickness(0, 0, 0, 4), BorderBrush = Ui.Br(Ui.Accent), BorderThickness = new Thickness(on && Ui.Square ? 3 : 0, 0, 0, 0) };
             sp.VerticalAlignment = VerticalAlignment.Center;
-            return Ui.Click(b, () => { if (id == tab && stack.Count > 1) { while (stack.Count > 1) stack.RemoveAt(stack.Count - 1); ShowTop(); } else ShowTab(id); }, on ? Ui.S2 : Ui.A(Colors.White, 0x0C));
+            return Ui.Click(b, () => { if (id == tab && stack.Count > 1) { while (stack.Count > 1) stack.RemoveAt(stack.Count - 1); ShowTop(); } else ShowTab(id); }, on ? Ui.NavOn : Ui.A(Colors.White, 0x0C));
         }
         void ShowTab(string id)
         {
@@ -229,7 +242,7 @@ namespace YouPlay
             tx.Children.Add(Ui.Text(title, 14.5, Ui.TEXT, true)); var st = Ui.Wrap(sub, 12.5, Ui.MUTED); st.Margin = new Thickness(0, 3, 0, 0); tx.Children.Add(st);
             Grid.SetColumn(tx, 1); g.Children.Add(tx);
             if (btn != null) { var b = Ui.Pill(btn, true, onClick); b.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(b, 2); g.Children.Add(b); }
-            return new Border { Child = g, Padding = new Thickness(16, 12, 12, 12), CornerRadius = new CornerRadius(16), Background = Ui.Br(Ui.SURF), BorderBrush = Ui.Br(Ui.A(Ui.Accent, 0x40)), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
+            return new Border { Child = g, Padding = new Thickness(16, 12, 12, 12), CornerRadius = Ui.CR(16), Background = Ui.Br(Ui.SURF), BorderBrush = Ui.Br(Ui.A(Ui.Accent, 0x40)), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
         }
 
         /// <summary>A track row: number / cover / title + source + artist / duration / ⋯</summary>
@@ -253,7 +266,7 @@ namespace YouPlay
             Grid.SetColumn(m, c++); g.Children.Add(m);
             var d = Ui.Text(t.Duration > 0 ? Ui.Fmt(t.Duration) : t.DurText, 12.5, Ui.FAINT); d.VerticalAlignment = VerticalAlignment.Center; d.Margin = new Thickness(0, 0, 10, 0); Grid.SetColumn(d, c++); g.Children.Add(d);
             var dots = Ui.IconButton("dots", 36, 18, Ui.MUTED, Colors.Transparent, () => TrackMenu(t, pl), "Ещё"); dots.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(dots, c++); g.Children.Add(dots);
-            var row = new Border { Child = g, CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 0, 6, 0), Background = Ui.Br(on ? Ui.A(Ui.Accent, 0x22) : Colors.Transparent) };
+            var row = new Border { Child = g, CornerRadius = Ui.CR(10), Padding = new Thickness(6, 0, 6, 0), Background = Ui.Br(on ? Ui.A(Ui.Accent, 0x22) : Colors.Transparent) };
             Ui.Click(row, () => { if (t.Playable) PlayList(list, i, name); else if (t.Browse != null) OpenBrowse(t.Browse, t.Title, t.Art); }, Ui.A(Colors.White, 0x0C));
             row.MouseRightButtonUp += (s, e) => TrackMenu(t, pl);
             return row;
@@ -277,7 +290,7 @@ namespace YouPlay
                 c.Children.Add(cv);
                 var a = Ui.Text(t.Title, 14, Ui.TEXT, true); a.Margin = new Thickness(0, 10, 0, 0); c.Children.Add(a);
                 var b = Ui.Text(t.Artist, 12.5, Ui.MUTED); b.Margin = new Thickness(0, 3, 0, 0); c.Children.Add(b);
-                var card = new Border { Child = c, Padding = new Thickness(8), CornerRadius = new CornerRadius(16), Margin = new Thickness(0, 0, 6, 0), Background = Ui.Br(Colors.Transparent) };
+                var card = new Border { Child = c, Padding = new Thickness(8), CornerRadius = Ui.CR(16), Margin = new Thickness(0, 0, 6, 0), Background = Ui.Br(Colors.Transparent) };
                 Ui.Click(card, () =>
                 {
                     if (t.Playable) { var songs = items.Where(x => x.Playable).ToList(); PlayList(songs, songs.IndexOf(t), name); }
@@ -297,7 +310,7 @@ namespace YouPlay
             if (!string.IsNullOrEmpty(art)) cv = Ui.Cover(art, 210, 210, 18);
             else
             {
-                cv = new Border { Width = 210, Height = 210, CornerRadius = new CornerRadius(18), Background = new LinearGradientBrush(coverBg, Ui.Darken(coverBg, 0.45), 45) };
+                cv = new Border { Width = 210, Height = 210, CornerRadius = Ui.CR(18), Background = new LinearGradientBrush(coverBg, Ui.Darken(coverBg, 0.45), 45) };
                 var ic = Ui.Icon(icon, 72, Colors.White); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center; cv.Child = ic;
             }
             cv.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 40, ShadowDepth = 10, Opacity = 0.45, Color = Colors.Black };
@@ -321,9 +334,23 @@ namespace YouPlay
             int h = DateTime.Now.Hour;
             body.Children.Add(Header(h < 6 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер", "Главная"));
             homeBody = new StackPanel(); body.Children.Add(homeBody);
+            if (!Online) { PaintOffline(); return Ui.Scroll(body); }
             PaintHome(Store.Obj("home"));
             LoadHome();
             return Ui.Scroll(body);
+        }
+        async void PaintOffline()
+        {
+            homeBody.Children.Clear();
+            homeBody.Children.Add(Banner("wifi", "Нет интернета", "YouTube Music и SoundCloud недоступны без сети. Музыка с компьютера играет как обычно.", "Моя музыка", OpenLocal));
+            var l = await LocalTracks();
+            if (l.Count == 0) { homeBody.Children.Add(Note("В папке «" + Engine.MusicFolder() + "» нет аудиофайлов. Выберите папку в «Настройках»")); return; }
+            homeBody.Children.Add(SectionTitle("Моя музыка"));
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            row.Children.Add(Ui.Pill("Слушать всё", true, () => PlayList(l, 0, "Моя музыка"), "play"));
+            var sh = Ui.Pill("Перемешать", false, () => PlayList(Shuffled(l), 0, "Моя музыка"), "shuffle"); sh.Margin = new Thickness(10, 0, 0, 0); row.Children.Add(sh);
+            homeBody.Children.Add(row);
+            var top = l.Take(30).ToList(); for (int k = 0; k < top.Count; k++) homeBody.Children.Add(Row(top[k], l, k, "Моя музыка", null));
         }
         async void LoadHome()
         {
@@ -358,6 +385,15 @@ namespace YouPlay
             searchBody = new StackPanel(); body.Children.Add(searchBody);
             return Ui.Scroll(body);
         }
+        readonly Dictionary<string, KeyValuePair<DateTime, Dictionary<string, object>>> pageCache = new Dictionary<string, KeyValuePair<DateTime, Dictionary<string, object>>>();
+        async Task<Dictionary<string, object>> Cached(string key, Func<Task<Dictionary<string, object>>> load)
+        {
+            KeyValuePair<DateTime, Dictionary<string, object>> hit;
+            if (pageCache.TryGetValue(key, out hit) && (DateTime.Now - hit.Key).TotalMinutes < 15) return hit.Value;
+            var d = await load();
+            if (!J.Has(d, "error")) pageCache[key] = new KeyValuePair<DateTime, Dictionary<string, object>>(DateTime.Now, d);
+            return d;
+        }
         async void DoSearch(string q)
         {
             lastQ = q; var my = ++searchSeq;
@@ -368,7 +404,8 @@ namespace YouPlay
             if (tab != "search") { tab = "search"; PaintNav(); }
             stack.Clear(); var page = SearchPage(); roots["search"] = page; stack.Add(new KeyValuePair<string, FrameworkElement>("search", page)); ShowTop();
             PaintSearch(q);
-            var yt = E.Eng("search", "q", q);
+            if (!Online) { sYt = new List<Track>(); sSc = new List<Track>(); PaintSearch(q); return; }
+            var yt = Cached("search:" + q.ToLowerInvariant(), () => E.Eng("search", "q", q));
             var sc = E.Soundcloud("search", q);
             var y = await yt; if (my != searchSeq) return;
             sYt = Track.List(J.A(y, "tracks"), "yt"); sMore = Track.List(J.A(y, "more"), "yt"); PaintSearch(q);
@@ -404,7 +441,7 @@ namespace YouPlay
             var body = PageBody();
             body.Children.Add(Header("Всё в одном месте", "Библиотека"));
             libBody = new StackPanel(); body.Children.Add(libBody);
-            PaintLib(); LoadRemote(false);
+            PaintLib(); if (Online) LoadRemote(false); else plAt = DateTime.Now;
             return Ui.Scroll(body);
         }
         Task LoadRemote(bool force)
@@ -453,7 +490,7 @@ namespace YouPlay
             if (!string.IsNullOrEmpty(art)) g.Children.Add(Ui.Cover(art, 176, 176, 16));
             else
             {
-                var bx = new Border { CornerRadius = new CornerRadius(16) };
+                var bx = new Border { CornerRadius = Ui.CR(16) };
                 if (dashed) { bx.BorderBrush = Ui.Br(Ui.S3); bx.BorderThickness = new Thickness(2); bx.Background = Brushes.Transparent; }
                 else bx.Background = new LinearGradientBrush(bg, Ui.Darken(bg, 0.45), 45);
                 var ic = Ui.Icon(icon, dashed ? 40 : 52, dashed ? Ui.Accent : Colors.White); ic.HorizontalAlignment = HorizontalAlignment.Center; ic.VerticalAlignment = VerticalAlignment.Center; bx.Child = ic;
@@ -463,7 +500,7 @@ namespace YouPlay
             c.Children.Add(g);
             var t = Ui.Text(title, 14, Ui.TEXT, true); t.Margin = new Thickness(0, 10, 0, 0); c.Children.Add(t);
             var s = Ui.Text(sub, 12.5, Ui.MUTED); s.Margin = new Thickness(0, 3, 0, 0); c.Children.Add(s);
-            var card = new Border { Child = c, Padding = new Thickness(8), CornerRadius = new CornerRadius(18), Margin = new Thickness(0, 0, 10, 12), Background = Ui.Br(Colors.Transparent) };
+            var card = new Border { Child = c, Padding = new Thickness(8), CornerRadius = Ui.CR(18), Margin = new Thickness(0, 0, 10, 12), Background = Ui.Br(Colors.Transparent) };
             return Ui.Click(card, onClick, Ui.A(Colors.White, 0x0A));
         }
 
@@ -549,7 +586,7 @@ namespace YouPlay
         {
             var host = new Grid(); Push("browse", host);
             var b0 = PageBody(); b0.Children.Add(Hero(art, "yt", Ui.S3, "YouTube Music", title, "Загружаю…")); host.Children.Add(Ui.Scroll(b0));
-            var d = await E.Eng("browse", "href", href);
+            var d = await Cached("browse:" + href, () => E.Eng("browse", "href", href));
             var l = Track.List(J.A(d, "tracks"), "yt").Where(t => !IsDisliked(t)).ToList();
             var body = PageBody(); var sv = Ui.Scroll(body);
             var t2 = J.S(d, "title"); if (t2.Length == 0) t2 = title;
@@ -659,7 +696,7 @@ namespace YouPlay
             foreach (var col0 in new[] { 0xFF5A36, 0xFF3D6E, 0xFFB020, 0x2BC48A, 0x22B8E6, 0x4A7DFF, 0x9B6BFF, 0xE6E1DC })
             {
                 var col = col0; var c = Ui.C(col);
-                var dot = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Ui.Br(c), Margin = new Thickness(0, 0, 10, 0), BorderBrush = Ui.Br(Ui.TEXT), BorderThickness = new Thickness(c == Ui.Accent ? 3 : 0) };
+                var dot = new Border { Width = 34, Height = 34, CornerRadius = Ui.CR(17), Background = Ui.Br(c), Margin = new Thickness(0, 0, 10, 0), BorderBrush = Ui.Br(Ui.TEXT), BorderThickness = new Thickness(c == Ui.Accent ? 3 : 0) };
                 Ui.Click(dot, () => { Ui.Accent = c; Store.Set("accent", col); RebuildAll(); }, c);
                 acc.Children.Add(dot);
             }
@@ -705,7 +742,7 @@ namespace YouPlay
             t.Children.Add(Ui.Text(title, 15, Ui.TEXT, true)); sub.Margin = new Thickness(0, 4, 0, 0); t.Children.Add(sub);
             Grid.SetColumn(t, 1); g.Children.Add(t);
             if (btn != null) { var b = Ui.Pill(btn, btn != "Выйти" && btn != "Сменить" && btn != "Очистить", onClick); b.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(b, 2); g.Children.Add(b); }
-            return new Border { Child = g, Padding = new Thickness(16, 12, 12, 12), CornerRadius = new CornerRadius(16), Background = Ui.Br(Ui.SURF), Margin = new Thickness(0, 0, 0, 8) };
+            return new Border { Child = g, Padding = new Thickness(16, 12, 12, 12), CornerRadius = Ui.CR(16), Background = Ui.Br(Ui.SURF), Margin = new Thickness(0, 0, 0, 8) };
         }
         FrameworkElement Toggle(string key, bool def, string title, string sub)
         {
@@ -714,11 +751,11 @@ namespace YouPlay
             var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             t.Children.Add(Ui.Text(title, 15, Ui.TEXT, true)); var s = Ui.Text(sub, 12.5, Ui.MUTED); s.Margin = new Thickness(0, 4, 0, 0); t.Children.Add(s);
             g.Children.Add(t);
-            var knob = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3, 0, 0, 0), RenderTransform = new TranslateTransform(on ? 20 : 0, 0) };
+            var knob = new Border { Width = 22, Height = 22, CornerRadius = Ui.CR(11), Background = Brushes.White, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3, 0, 0, 0), RenderTransform = new TranslateTransform(on ? 20 : 0, 0) };
             var trackBg = new SolidColorBrush(on ? Ui.Accent : Ui.S3);
-            var sw = new Border { Width = 48, Height = 28, CornerRadius = new CornerRadius(14), Background = trackBg, Child = knob, VerticalAlignment = VerticalAlignment.Center };
+            var sw = new Border { Width = 48, Height = 28, CornerRadius = Ui.CR(14), Background = trackBg, Child = knob, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(sw, 1); g.Children.Add(sw);
-            var row = new Border { Child = g, Padding = new Thickness(16, 12, 16, 12), CornerRadius = new CornerRadius(16), Background = Ui.Br(Ui.SURF), Margin = new Thickness(0, 0, 0, 8) };
+            var row = new Border { Child = g, Padding = new Thickness(16, 12, 16, 12), CornerRadius = Ui.CR(16), Background = Ui.Br(Ui.SURF), Margin = new Thickness(0, 0, 0, 8) };
             Ui.Click(row, () =>
             {
                 on = !on; Store.Set(key, on);

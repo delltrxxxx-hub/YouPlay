@@ -40,7 +40,7 @@ namespace YouPlay
             var center = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
             var ctl = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
             bShuffle = Ui.IconButton("shuffle", 34, 18, Ui.MUTED, Colors.Transparent, ToggleShuffle, "Перемешать");
-            bPlay = Ui.IconButton("play", 40, 20, Ui.C(0x111111), Ui.TEXT, () => P.Toggle(), "Пауза / играть");
+            bPlay = Ui.IconButton("play", 40, 20, Ui.OnFill, Ui.Fill, () => P.Toggle(), "Пауза / играть");
             bRepeat = Ui.IconButton("repeat", 34, 18, Ui.MUTED, Colors.Transparent, CycleRepeat, "Повтор");
             foreach (var b in new[] { bShuffle, Ui.IconButton("prev", 36, 20, Ui.TEXT, Colors.Transparent, () => P.Prev(), "Назад"), bPlay, Ui.IconButton("next", 36, 20, Ui.TEXT, Colors.Transparent, () => P.Next(false), "Дальше"), bRepeat }) { b.Margin = new Thickness(7, 0, 7, 0); ctl.Children.Add(b); }
             center.Children.Add(ctl);
@@ -105,11 +105,11 @@ namespace YouPlay
             Grid.SetRow(body, 1); g.Children.Add(body);
             var left = new Grid();
             left.RowDefinitions.Add(new RowDefinition()); left.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            npArt = new Border { CornerRadius = new CornerRadius(18), Background = Ui.Br(Ui.S2), HorizontalAlignment = HorizontalAlignment.Stretch, Effect = new DropShadowEffect { BlurRadius = 50, ShadowDepth = 14, Opacity = 0.5 } };
+            npArt = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.S2), HorizontalAlignment = HorizontalAlignment.Stretch, Effect = new DropShadowEffect { BlurRadius = 50, ShadowDepth = 14, Opacity = 0.5 } };
             var artBox = new Grid();
             // the cover flips over: the back side tells about the track
             flipBox = new Grid { RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1), Cursor = Cursors.Hand, ToolTip = "Нажмите — обложка перевернётся: исполнители, альбом, год" };
-            npBack = new Border { CornerRadius = new CornerRadius(18), Background = Ui.Br(Ui.A(Ui.SURF, 0xF0)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Padding = new Thickness(22, 18, 22, 18) };
+            npBack = new Border { CornerRadius = Ui.CR(18), Background = Ui.Br(Ui.A(Ui.SURF, 0xF0)), BorderBrush = Ui.Br(Ui.A(Colors.White, 0x18)), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Padding = new Thickness(22, 18, 22, 18) };
             flipBox.Children.Add(npArt); flipBox.Children.Add(npBack);
             artBox.Children.Add(flipBox);
             flipBox.MouseLeftButtonUp += (s, e) => { if (P.Cur != null) FlipCover(); };
@@ -138,7 +138,7 @@ namespace YouPlay
             var cg = new Grid { Margin = new Thickness(0, 14, 0, 0) };
             for (int i = 0; i < 5; i++) cg.ColumnDefinitions.Add(new ColumnDefinition());
             npShuffle = Ui.IconButton("shuffle", 46, 23, Ui.TEXT, Colors.Transparent, ToggleShuffle, "Перемешать");
-            npPlay = Ui.IconButton("play", 72, 32, Ui.C(0x111111), Ui.TEXT, () => P.Toggle(), "Пауза / играть (пробел)");
+            npPlay = Ui.IconButton("play", 72, 32, Ui.OnFill, Ui.Fill, () => P.Toggle(), "Пауза / играть (пробел)");
             npRepeat = Ui.IconButton("repeat", 46, 23, Ui.TEXT, Colors.Transparent, CycleRepeat, "Повтор");
             var cs = new[] { npShuffle, Ui.IconButton("prev", 54, 28, Ui.TEXT, Colors.Transparent, () => P.Prev(), "Назад"), npPlay, Ui.IconButton("next", 54, 28, Ui.TEXT, Colors.Transparent, () => P.Next(false), "Дальше"), npRepeat };
             for (int i = 0; i < cs.Length; i++) { Grid.SetColumn(cs[i], i); cg.Children.Add(cs[i]); }
@@ -172,6 +172,7 @@ namespace YouPlay
             return L;
         }
         TextBlock lyOffText; DateTime lyManual = DateTime.MinValue;
+        static string Norm(string s) { return Regex.Replace((s ?? "").ToLowerInvariant(), @"[^\p{L}\p{N}]", ""); }
         Grid flipBox; Border npBack; bool flipped, flipping; string backFor;
         void FlipCover()
         {
@@ -227,6 +228,17 @@ namespace YouPlay
             var r = await E.Eng("clip", "videoId", t.VideoId);
             if (P.Cur == null || P.Cur.Key != t.Key || !npOpen) return;
             var id = J.S(r, "clip");
+            if (id.Length == 0)
+            {
+                var baseTitle = Norm(Regex.Replace(Clean(t.Title), @"\s*[(\[].*$", ""));
+                var artist = Norm(Regex.Split(t.Artist, @",| и | & | feat", RegexOptions.IgnoreCase)[0]);
+                var s = await E.Eng("search", "q", t.Title + " " + Regex.Split(t.Artist, @",| и | & ", RegexOptions.IgnoreCase)[0] + " official video", "low", true);
+                if (P.Cur == null || P.Cur.Key != t.Key || !npOpen) return;
+                var bad = new Regex("lyric|текст|karaoke|караоке|visuali|audio|slowed|sped|reverb|8d|nightcore|cover|live|концерт", RegexOptions.IgnoreCase);
+                var cands = Track.List(J.A(s, "tracks"), "yt").Where(x => x.Kind == "video" && baseTitle.Length > 1 && Norm(x.Title).Contains(baseTitle) && (artist.Length == 0 || Norm(x.Artist + x.Title).Contains(artist)) && !bad.IsMatch(x.Title)).ToList();
+                var hit = cands.FirstOrDefault(x => Regex.IsMatch(x.Title, "official|video|клип", RegexOptions.IgnoreCase)) ?? cands.FirstOrDefault();
+                if (hit != null) id = hit.VideoId;
+            }
             if (id.Length == 0) { StopClip(); return; }
             await EnsureClipView();
             if (clipView == null || clipView.CoreWebView2 == null) return;
@@ -239,7 +251,7 @@ namespace YouPlay
             try
             {
                 clipView = new Microsoft.Web.WebView2.Wpf.WebView2CompositionControl { IsHitTestVisible = false };
-                clipHost.Children.Add(clipView);
+                clipHost.Children.Add(clipView); clipHost.Children.Add(new Border { Background = Ui.Br(Ui.A(Colors.Black, 0x8C)), IsHitTestVisible = false });
                 await clipView.EnsureCoreWebView2Async(E.Env);
                 var c = clipView.CoreWebView2;
                 c.IsMuted = true;
@@ -285,7 +297,7 @@ window.syncClip=function(t,playing){if(!pl||!pl.getCurrentTime)return;if(Math.ab
 window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
 </script><script src='https://www.youtube.com/iframe_api'></script></body></html>";
         Border SmallChip(string s, Action a) { return SmallChipEl(Ui.Text(s, 12, Ui.TEXT, true), a); }
-        Border SmallChipEl(TextBlock t, Action a) { t.VerticalAlignment = VerticalAlignment.Center; return Ui.Click(new Border { Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(15), Background = Ui.Br(Ui.A(Colors.White, 0x18)), Child = t, Margin = new Thickness(6, 0, 0, 0) }, a, Ui.A(Colors.White, 0x2A)); }
+        Border SmallChipEl(TextBlock t, Action a) { t.VerticalAlignment = VerticalAlignment.Center; return Ui.Click(new Border { Height = 30, Padding = new Thickness(12, 0, 12, 0), CornerRadius = Ui.CR(15), Background = Ui.Br(Ui.A(Colors.White, 0x18)), Child = t, Margin = new Thickness(6, 0, 0, 0) }, a, Ui.A(Colors.White, 0x2A)); }
         void SetPane(string p)
         {
             npPane = p;
@@ -299,9 +311,9 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
         }
         void PaintTab(Border b, bool on)
         {
-            b.Background = Ui.Br(on ? Ui.TEXT : Ui.A(Colors.White, 0x1C));
+            b.Background = Ui.Br(on ? Ui.Fill : Ui.A(Colors.White, 0x1C));
             var sp = b.Child as StackPanel; if (sp == null) return;
-            foreach (var c in sp.Children) { var t = c as TextBlock; if (t != null) t.Foreground = Ui.Br(on ? Ui.C(0x111111) : Ui.TEXT); var f = c as FrameworkElement; if (f is Viewbox) Ui.Recolor(f, on ? Ui.C(0x111111) : Ui.TEXT); }
+            foreach (var c in sp.Children) { var t = c as TextBlock; if (t != null) t.Foreground = Ui.Br(on ? Ui.OnFill : Ui.TEXT); var f = c as FrameworkElement; if (f is Viewbox) Ui.Recolor(f, on ? Ui.OnFill : Ui.TEXT); }
         }
         void OpenNP()
         {
@@ -337,7 +349,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
         void PaintNP()
         {
             var t = P.Cur;
-            Ui.SetIcon(bPlay, P.Playing ? "pause" : "play", Ui.C(0x111111));
+            Ui.SetIcon(bPlay, P.Playing ? "pause" : "play", Ui.OnFill);
             bool l = LikedNow();
             Ui.SetIcon(bLike, l ? "heart" : "heartLine", l ? Ui.Accent : Ui.TEXT);
             Ui.SetIcon(bShuffle, "shuffle", P.Shuffle ? Ui.Accent : Ui.MUTED);
@@ -345,7 +357,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             if (t == null) return;
             npTitle.Text = t.Title; npArtist.Text = t.Artist; npBadgeHost.Child = Ui.Badge(t.Src, t.Kind);
             npSrc.Text = (P.Name.Length > 0 ? P.Name : "Сейчас играет").ToUpperInvariant();
-            Ui.SetIcon(npPlay, P.Playing ? "pause" : "play", Ui.C(0x111111));
+            Ui.SetIcon(npPlay, P.Playing ? "pause" : "play", Ui.OnFill);
             Ui.SetIcon(npLike, l ? "heart" : "heartLine", l ? Ui.Accent : Ui.TEXT);
             Ui.SetIcon(npDislike, "broken", IsDisliked(t) || t.Disliked ? Ui.Accent : Ui.TEXT);
             Ui.SetIcon(npShuffle, "shuffle", P.Shuffle ? Ui.Accent : Ui.TEXT);
@@ -398,6 +410,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             int my = ++lyReq; lyLast = -2; lyDur = 0; lySrc.Text = ""; PaintOffset();
             LyMsg("Ищу текст…");
             if (it.Title.Length == 0) { LyMsg("Текст не найден"); return; }
+            if (!Online) { LyMsg("Текст недоступен без интернета"); return; }
             lyTempo = TEMPO.IsMatch(it.Title);
             string a = Regex.Split(Track.CleanArtist(it.Artist), @"•|·|,| и | & | feat\.| ft\.| x ", RegexOptions.IgnoreCase)[0];
             a = Regex.Replace(Regex.Replace(a, @"\s*-\s*topic$", "", RegexOptions.IgnoreCase), "vevo$", "", RegexOptions.IgnoreCase).Trim();
