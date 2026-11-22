@@ -34,6 +34,17 @@ namespace YouPlay
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
 
+        static void TrimCache(string dir, long max)
+        {
+            try
+            {
+                if (!Directory.Exists(dir)) return;
+                var files = new DirectoryInfo(dir).GetFiles().OrderByDescending(f => f.LastAccessTimeUtc).ToList();
+                long total = 0;
+                foreach (var f in files) { total += f.Length; if (total > max) try { f.Delete(); } catch { } }
+            }
+            catch { }
+        }
         [STAThread]
         static void Main(string[] args)
         {
@@ -47,6 +58,9 @@ namespace YouPlay
                     return;
                 }
                 Directory.CreateDirectory(Data);
+                System.Net.ServicePointManager.DefaultConnectionLimit = 32;
+                System.Net.ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType)3072;
+                System.Threading.Tasks.Task.Run(() => TrimCache(Path.Combine(Data, "cache", "img"), 400L * 1024 * 1024));
                 // --no-update only switches updates off in a separate test copy (own YOUPLAY_DATA_DIR), never in a normal install
                 Updater.Enabled = !(Array.IndexOf(args, "--no-update") >= 0 && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("YOUPLAY_DATA_DIR")));
                 var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
@@ -56,6 +70,7 @@ namespace YouPlay
             }
         }
     }
+
 
     /// <summary>JSON helpers over JavaScriptSerializer (objects → Dictionary, arrays → object[] / ArrayList).</summary>
     static class J

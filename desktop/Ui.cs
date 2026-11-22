@@ -112,36 +112,132 @@ namespace YouPlay
         }
 
         // ── images ──
-        static readonly Dictionary<string, BitmapImage> cache = new Dictionary<string, BitmapImage>();
+        // ── images: the right size for each place, many at once, kept on disk, no letterbox bars ──
+        static readonly Dictionary<string, BitmapSource> mem = new Dictionary<string, BitmapSource>();
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Border, string> want = new System.Runtime.CompilerServices.ConditionalWeakTable<Border, string>();
+        static readonly System.Threading.SemaphoreSlim gate = new System.Threading.SemaphoreSlim(12);
+        static readonly string imgDir = System.IO.Path.Combine(Program.Data, "cache", "img");
+        public static double Dpi = 1;
         public static Border Cover(string url, double w, double h, double radius, string fallbackIcon = "music")
         {
             var b = new Border { Width = w, Height = h, CornerRadius = Ui.CR(radius), Background = Br(S2), ClipToBounds = true };
             Load(b, url, (int)Math.Max(w, h), fallbackIcon);
             return b;
         }
+        /// <summary>The same picture at the size needed here (small for lists, large for the player).</summary>
+        static string[] Sized(string url, int w)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(url, @"i\.ytimg\.com/vi(?:_webp)?/([\w-]+)/");
+            if (m.Success)
+            {
+                var id = m.Groups[1].Value; var root = "https://i.ytimg.com/vi/" + id + "/";
+                return w > 160 ? new[] { root + "maxresdefault.jpg", root + "hq720.jpg", root + "sddefault.jpg", root + "hqdefault.jpg" } : new[] { root + "hq720.jpg", root + "mqdefault.jpg", root + "hqdefault.jpg" };
+            }
+            if (url.Contains("googleusercontent.com") || url.Contains("ggpht.com"))
+            {
+                int sz = Math.Max(120, Math.Min(1200, w));
+                var u = System.Text.RegularExpressions.Regex.IsMatch(url, @"=w\d+-h\d+") ? System.Text.RegularExpressions.Regex.Replace(url, @"=w\d+-h\d+[^&?]*", "=w" + sz + "-h" + sz + "-l90-rj")
+                      : System.Text.RegularExpressions.Regex.IsMatch(url, @"=s\d+") ? System.Text.RegularExpressions.Regex.Replace(url, @"=s\d+[^&?]*", "=s" + sz) : url;
+                return new[] { u, url };
+            }
+            if (url.Contains("sndcdn.com"))
+            {
+                var u = System.Text.RegularExpressions.Regex.Replace(url, @"-(large|t\d+x\d+|small|badge|tiny|mini|crop|original)\.", w > 300 ? "-t500x500." : "-t300x300.");
+                return new[] { u, url };
+            }
+            return new[] { url };
+        }
         public static void Load(Border b, string url, int px, string fallbackIcon = "music")
         {
             if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) { b.Background = Br(S2); if (fallbackIcon != null) b.Child = new Border { Child = Icon(fallbackIcon, Math.Max(16, b.Width * 0.38), FAINT), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; return; }
             b.Child = null;
-            BitmapImage img;
-            if (!cache.TryGetValue(url, out img))
+            int w = Math.Max(64, (int)(px * Dpi * 1.15));
+            int bucket = w <= 140 ? 140 : w <= 300 ? 300 : w <= 600 ? 600 : 1200;
+            var key = url + "|" + bucket;
+            want.Remove(b); want.Add(b, key);
+            BitmapSource hit;
+            lock (mem) mem.TryGetValue(key, out hit);
+            if (hit != null) { b.Background = new ImageBrush(hit) { Stretch = Stretch.UniformToFill }; return; }
+            b.Background = Br(S2);
+            var disp = b.Dispatcher;
+            System.Threading.Tasks.Task.Run(() =>
             {
-                try
+                var bmp = Fetch(Sized(url, bucket), bucket);
+                if (bmp == null) return;
+                lock (mem) { if (mem.Count > 700) mem.Clear(); mem[key] = bmp; }
+                disp.BeginInvoke((Action)(() =>
                 {
-                    img = new BitmapImage();
-                    img.BeginInit(); img.UriSource = new Uri(url); img.DecodePixelWidth = Math.Min(900, (int)(px * 1.6)); img.CacheOption = BitmapCacheOption.OnLoad; img.CreateOptions = BitmapCreateOptions.IgnoreColorProfile; img.EndInit();
-                    if (cache.Count > 600) cache.Clear();
-                    cache[url] = img;
-                }
-                catch { return; }
-            }
-            var brush = new ImageBrush(img) { Stretch = Stretch.UniformToFill };
-            b.Background = brush;
-            if (img.IsDownloading)
+                    string cur; if (!want.TryGetValue(b, out cur) || cur != key) return;
+                    b.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+                    b.Opacity = 0; b.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+                }));
+            });
+        }
+        static BitmapSource Fetch(string[] urls, int w)
+        {
+            gate.Wait();
+            try
             {
-                b.Background = Br(S2);
-                img.DownloadCompleted += (s, e) => { b.Background = brush; b.Opacity = 0; b.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(220))); };
+                foreach (var u in urls)
+                {
+                    byte[] data = null;
+                    var file = System.IO.Path.Combine(imgDir, Hash(u) + ".img");
+                    try { if (System.IO.File.Exists(file)) data = System.IO.File.ReadAllBytes(file); } catch { }
+                    if (data == null)
+                    {
+                        try
+                        {
+                            using (var wc = new System.Net.WebClient()) { wc.Headers.Add("User-Agent", "YouPlay/" + Program.Version); data = wc.DownloadData(u); }
+                            if (data.Length < 1500 && u.Contains("ytimg.com")) data = null;   // YouTube's grey "no picture" placeholder
+                            if (data != null) { try { System.IO.Directory.CreateDirectory(imgDir); System.IO.File.WriteAllBytes(file, data); } catch { } }
+                        }
+                        catch { data = null; }
+                    }
+                    if (data == null) continue;
+                    try
+                    {
+                        var bi = new BitmapImage();
+                        bi.BeginInit(); bi.StreamSource = new System.IO.MemoryStream(data); bi.CacheOption = BitmapCacheOption.OnLoad; bi.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+                        if (!u.Contains("ytimg.com")) bi.DecodePixelWidth = w;   // video frames are cropped first, then shown
+                        bi.EndInit(); bi.Freeze();
+                        BitmapSource res = u.Contains("ytimg.com") ? SquareCrop(bi) : bi;
+                        if (!res.IsFrozen) res.Freeze();
+                        return res;
+                    }
+                    catch { }
+                }
+                return null;
             }
+            finally { gate.Release(); }
+        }
+        static string Hash(string s) { using (var h = System.Security.Cryptography.SHA1.Create()) return BitConverter.ToString(h.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s))).Replace("-", "").ToLowerInvariant(); }
+        /// <summary>Video thumbnails: cut off black / flat bars around the picture, then take the centre square.</summary>
+        static BitmapSource SquareCrop(BitmapSource src)
+        {
+            try
+            {
+                var conv = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);
+                int W = conv.PixelWidth, H = conv.PixelHeight, stride = W * 4;
+                var px = new byte[stride * H]; conv.CopyPixels(px, stride, 0);
+                Func<int, int, int> lum = (x, y) => { int i = y * stride + x * 4; return (px[i] * 11 + px[i + 1] * 59 + px[i + 2] * 30) / 100; };
+                Func<int, bool, bool> flat = (k, row) =>
+                {
+                    int n = row ? W : H, step = Math.Max(1, n / 48), first = row ? lum(0, k) : lum(k, 0), lo = 255, hi = 0;
+                    for (int j = 0; j < n; j += step) { int v = row ? lum(j, k) : lum(k, j); if (v < lo) lo = v; if (v > hi) hi = v; }
+                    return hi - lo < 18;   // a bar is one flat colour across
+                };
+                int top = 0, bottom = H - 1, left = 0, right = W - 1;
+                while (top < H / 3 && flat(top, true)) top++;
+                while (bottom > H * 2 / 3 && flat(bottom, true)) bottom--;
+                while (left < W / 3 && flat(left, false)) left++;
+                while (right > W * 2 / 3 && flat(right, false)) right--;
+                int cw = right - left + 1, ch = bottom - top + 1, side = Math.Min(cw, ch);
+                if (side < 40) return src;
+                int x0 = left + (cw - side) / 2, y0 = top + (ch - side) / 2;
+                var crop = new CroppedBitmap(src, new Int32Rect(x0, y0, side, side)); crop.Freeze();
+                return crop;
+            }
+            catch { return src; }
         }
 
         // ── smooth scrolling ──

@@ -375,7 +375,7 @@ window.stopClip=function(){if(pl&&pl.stopVideo)pl.stopVideo();};
             if (t.Art != lastArt)
             {
                 lastArt = t.Art;
-                Ui.Load(barArt, t.Art, 56, "music"); Ui.Load(npArt, t.Art, 520, "music");
+                Ui.Load(barArt, t.Art, 64, "music"); Ui.Load(npArt, t.Art, 900, "music");
                 SetBackdrop(t.Art);
             }
             if (t.Key != lastKey)

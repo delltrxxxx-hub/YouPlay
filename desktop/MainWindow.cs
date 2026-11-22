@@ -42,7 +42,7 @@ namespace YouPlay
             RestoreBounds_();
             P = new Player(E) { IsDisliked = IsDisliked };
             BuildShell();
-            SourceInitialized += (s, e) => ApplyBackdrop();
+            SourceInitialized += (s, e) => { ApplyBackdrop(); try { var src = PresentationSource.FromVisual(this); if (src != null && src.CompositionTarget != null) Ui.Dpi = Math.Max(1, src.CompositionTarget.TransformToDevice.M11); } catch { } };
             Loaded += async (s, e) => await Start();
             Closing += (s, e) => { SaveBounds(); Store.SaveNow(); try { E.Host.Close(); } catch { } };
             PreviewKeyDown += OnKey;
